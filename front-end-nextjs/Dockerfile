@@ -1,6 +1,9 @@
 # Use Node.js as the base image
 FROM node:18-alpine
 
+# Install curl
+RUN apk add --no-cache curl
+
 # Set the working directory
 WORKDIR /app
 
