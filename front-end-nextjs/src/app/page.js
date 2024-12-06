@@ -1,4 +1,4 @@
-'use client'
+'use client';
 
 import { useState } from 'react';
 import axios from 'axios';
@@ -10,7 +10,9 @@ export default function Home() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post(`http://localhost:8000/generate-qr/?url=${url}`);
+      // Use the backend URL from environment variables or default to localhost for development
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+      const response = await axios.post(`${backendUrl}/generate-qr/`, { url });
       setQrCodeUrl(response.data.qr_code_url);
     } catch (error) {
       console.error('Error generating QR Code:', error);
@@ -63,7 +65,7 @@ const styles = {
     border: 'none',
     marginTop: '20px',
     width: '300px',
-    color: '#121212'
+    color: '#121212',
 
   },
   button: {
