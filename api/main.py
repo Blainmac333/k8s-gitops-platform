@@ -5,15 +5,17 @@ import boto3
 import os
 from io import BytesIO
 
-# Loading Environment variable (AWS Access Key and Secret Key)
+# Load Environment Variables (AWS and FRONTEND URL)
 from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI()
 
-# Allowing CORS for local testing
+# Dynamically set allowed origins for CORS
 origins = [
-    os.getenv("FRONTEND_URL", "http://localhost:3000")
+    os.getenv("FRONTEND_URL", "http://localhost:3000"),  # Default to localhost for local testing
+    "http://frontend-service",  # Kubernetes service name for frontend
+    "http://a5d1c7b8c24b44914ab240c0fcf0fa79-516043998.eu-west-2.elb.amazonaws.com"  # Frontend LoadBalancer URL
 ]
 
 app.add_middleware(
@@ -26,10 +28,11 @@ app.add_middleware(
 # AWS S3 Configuration
 s3 = boto3.client(
     's3',
-    aws_access_key_id= os.getenv("AWS_ACCESS_KEY"),
-    aws_secret_access_key= os.getenv("AWS_SECRET_KEY"))
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY"),
+    aws_secret_access_key=os.getenv("AWS_SECRET_KEY")
+)
 
-bucket_name = 'qr-storage' # Add your bucket name here
+bucket_name = 'qr-storage'  # Add your bucket name here
 
 @app.post("/generate-qr/")
 async def generate_qr(url: str):
@@ -74,5 +77,4 @@ async def generate_qr(url: str):
     except Exception as e:
         print(f"Error uploading to S3: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to upload QR code to S3: {str(e)}")
-
     
