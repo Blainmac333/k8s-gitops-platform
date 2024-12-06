@@ -20,3 +20,5 @@ spec:
           env:
             - name: ENVIRONMENT
               value: "production"
+            - name: FRONTEND_URL
+              value: "http://frontend-service"  # Kubernetes frontend service name
