@@ -2,11 +2,7 @@ name: Build, Push, and Deploy to Pi
 
 on:
   push:
-    branches: [ master ] 
-
-concurrency:
-  group: deploy-pi
-  cancel-in-progress: true
+    branches: [ master ]
 
 jobs:
   build-and-push:
@@ -23,6 +19,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Lowercase owner
+        run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -38,8 +37,8 @@ jobs:
           platforms: linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/qr-backend:latest
-            ghcr.io/${{ github.repository_owner }}/qr-backend:${{ github.sha }}
+            ghcr.io/${{ env.OWNER_LC }}/qr-backend:latest
+            ghcr.io/${{ env.OWNER_LC }}/qr-backend:${{ github.sha }}
 
       - name: Build & push frontend (ARM64)
         uses: docker/build-push-action@v6
@@ -49,36 +48,5 @@ jobs:
           platforms: linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/qr-frontend:latest
-            ghcr.io/${{ github.repository_owner }}/qr-frontend:${{ github.sha }}
-
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: SSH into Pi and deploy
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.PI_SSH_HOST }}
-          username: ${{ secrets.PI_SSH_USER }}
-          key: ${{ secrets.PI_SSH_KEY }}
-          script_stop: true
-          script: |
-            set -e
-            cd ~/apps/devops-qr
-
-            # If images are private, log in to GHCR
-            if [ -n "${{ secrets.GHCR_PAT }}" ]; then
-              echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
-            fi
-
-            # Support both compose variants
-            if command -v docker-compose >/dev/null 2>&1; then
-              docker-compose pull
-              docker-compose up -d
-            else
-              docker compose pull
-              docker compose up -d
-            fi
-
-            docker image prune -f
+            ghcr.io/${{ env.OWNER_LC }}/qr-frontend:latest
+            ghcr.io/${{ env.OWNER_LC }}/qr-frontend:${{ github.sha }}
