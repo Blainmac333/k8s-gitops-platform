@@ -2,7 +2,7 @@ name: Build, Push, and Deploy to Pi
 
 on:
   push:
-    branches: [ master ]   # keep master if that’s your default
+    branches: [ master ] 
 
 concurrency:
   group: deploy-pi
@@ -23,7 +23,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Lowercase owner for GHCR tag paths
       - name: Lowercase owner
         run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
 
@@ -55,34 +54,28 @@ jobs:
           tags: |
             ghcr.io/${{ env.OWNER_LC }}/qr-frontend:latest
             ghcr.io/${{ env.OWNER_LC }}/qr-frontend:${{ github.sha }}
-
+        
   deploy:
     needs: build-and-push
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64] 
     steps:
-      - name: SSH into Pi and deploy
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.PI_SSH_HOST }}
-          username: ${{ secrets.PI_SSH_USER }}
-          key: ${{ secrets.PI_SSH_KEY }}
-          script_stop: true
-          script: |
-            set -e
-            cd ~/apps/devops-qr
+      - name: Pull and restart stack on Pi
+        run: |
+          set -e
+          cd ~/apps/devops-qr
 
-            # If your GHCR packages are private, log in first
-            if [ -n "${{ secrets.GHCR_PAT }}" ]; then
-              echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
-            fi
+          # If GHCR images are private, login first (set GHCR_USERNAME & GHCR_PAT secrets)
+          if [ -n "${{ secrets.GHCR_PAT }}" ]; then
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+          fi
 
-            # Pull and restart (supports both compose variants)
-            if command -v docker-compose >/dev/null 2>&1; then
-              docker-compose pull
-              docker-compose up -d
-            else
-              docker compose pull
-              docker compose up -d
-            fi
+          # Pull & start
+          if command -v docker-compose >/dev/null 2>&1; then
+            docker-compose pull
+            docker-compose up -d
+          else
+            docker compose pull
+            docker compose up -d
+          fi
 
-            docker image prune -f
+          docker image prune -f
