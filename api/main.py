@@ -1,45 +1,53 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 import qrcode
-import boto3
 import os
+import hashlib
 from io import BytesIO
 
-# Load Environment Variables (AWS and FRONTEND URL)
+# Load .env if present
 from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI()
 
-# Dynamically set allowed origins for CORS
-origins = [
-    os.getenv("FRONTEND_URL", "http://localhost:3000"),  # Default to localhost for local testing
-    "http://frontend-service",  # Kubernetes service name for frontend
-    "http://a5d1c7b8c24b44914ab240c0fcf0fa79-516043998.eu-west-2.elb.amazonaws.com"  # Frontend LoadBalancer URL
-]
-
+# ---------- CORS ----------
+FRONTEND_URL_ENV = os.getenv("FRONTEND_URL", "http://localhost:3000")
+ALLOWED_ORIGINS = {
+    FRONTEND_URL_ENV,
+    "http://192.168.1.105:3000",     # your Pi frontend
+    "http://raspberrypi.local:3000", # optional
+    "http://localhost:3000",
+}
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=list(ALLOWED_ORIGINS),
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# AWS S3 Configuration
-s3 = boto3.client(
-    's3',
-    aws_access_key_id=os.getenv("AWS_ACCESS_KEY"),
-    aws_secret_access_key=os.getenv("AWS_SECRET_KEY")
-)
+# ---------- Local storage ----------
+LOCAL_STORAGE_DIR = os.getenv("LOCAL_STORAGE_DIR", "/data/qrs")
+os.makedirs(LOCAL_STORAGE_DIR, exist_ok=True)  # ensure directory exists
 
-bucket_name = 'qr-storage'  # Add your bucket name here
+# Serve files at /qrs/<file.png>
+app.mount("/qrs", StaticFiles(directory=LOCAL_STORAGE_DIR), name="qrs")
 
+# ---------- Request model ----------
+class QRRequest(BaseModel):
+    url: str
+
+# ---------- Endpoint ----------
+@app.post("/generate-qr")
 @app.post("/generate-qr/")
-async def generate_qr(url: str):
-    print("Function `generate_qr` called with URL:", url)
+async def generate_qr(payload: QRRequest, request: Request):
+    url = payload.url
 
     try:
-        # Generate QR Code
+        # Build QR
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
@@ -48,33 +56,24 @@ async def generate_qr(url: str):
         )
         qr.add_data(url)
         qr.make(fit=True)
-
         img = qr.make_image(fill_color="black", back_color="white")
-        print("QR code generated successfully.")
 
-        # Save QR Code to BytesIO object
-        img_byte_arr = BytesIO()
-        img.save(img_byte_arr, format='PNG')
-        img_byte_arr.seek(0)
-        print("QR code saved to BytesIO successfully.")
+        # Create a stable, safe filename
+        digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
+        filename = f"qr_{digest}.png"
+        filepath = os.path.join(LOCAL_STORAGE_DIR, filename)
+
+        # Save to disk
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        with open(filepath, "wb") as f:
+            f.write(buf.getvalue())
+
+        # Absolute URL the browser can load
+        base = str(request.base_url).rstrip("/")
+        file_url = f"{base}/qrs/{filename}"
+
+        return {"qr_code_url": file_url}
+
     except Exception as e:
-        print(f"Error generating or saving QR code: {e}")
-        raise HTTPException(status_code=500, detail="Failed to generate QR code")
-
-    # Generate file name for S3
-    file_name = f"qr_codes/{url.split('//')[-1]}.png"
-    print("Generated file name for S3:", file_name)
-
-    try:
-        # Upload to S3 without ACL parameter
-        s3.put_object(Bucket=bucket_name, Key=file_name, Body=img_byte_arr, ContentType='image/png')
-        print("QR code uploaded to S3 successfully.")
-
-        # Generate the S3 URL
-        s3_url = f"https://{bucket_name}.s3.amazonaws.com/{file_name}"
-        print("Generated S3 URL:", s3_url)
-        return {"qr_code_url": s3_url}
-    except Exception as e:
-        print(f"Error uploading to S3: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to upload QR code to S3: {str(e)}")
-    
+        raise HTTPException(status_code=500, detail=f"Failed to generate QR code: {e}")
