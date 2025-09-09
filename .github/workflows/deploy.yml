@@ -80,4 +80,4 @@ jobs:
             docker compose up -d
           fi
 
-          docker image prune -fs
+          docker image prune -f || true
