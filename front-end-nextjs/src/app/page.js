@@ -10,10 +10,8 @@ export default function Home() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Use the value baked at build time
-      const API_BASE =
-        process.env.NEXT_PUBLIC_API_BASE ?? 'http://192.168.1.105:8000';
-
+      // use single-origin via Caddy: call relative /api
+      const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '/api';
       const response = await axios.post(`${API_BASE}/generate-qr`, { url });
       setQrCodeUrl(response.data.qr_code_url);
     } catch (error) {

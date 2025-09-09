@@ -51,9 +51,8 @@ jobs:
           file: ./front-end-nextjs/Dockerfile
           platforms: linux/arm64
           push: true
-          no-cache: true
           build-args: |
-            NEXT_PUBLIC_API_BASE=http://192.168.1.105:8000
+            NEXT_PUBLIC_API_BASE=/api
           tags: |
             ghcr.io/${{ env.OWNER_LC }}/qr-frontend:latest
             ghcr.io/${{ env.OWNER_LC }}/qr-frontend:${{ github.sha }}
@@ -81,4 +80,4 @@ jobs:
             docker compose up -d
           fi
 
-          docker image prune -f
+          docker image prune -fs
