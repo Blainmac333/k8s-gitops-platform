@@ -1,0 +1,24 @@
+{
+  # absolutely disable HTTPS at the origin
+  auto_https off
+}
+
+# one HTTP-only server
+http://:80 {
+  # CV vhost (match by Host header)
+  @cv host cv.blainweb.com
+  handle @cv {
+    root * /srv/cv
+    file_server
+  }
+
+  # API
+  handle_path /api/* {
+    reverse_proxy backend:8000
+  }
+
+  # everything else -> frontend
+  handle {
+    reverse_proxy frontend:3000
+  }
+}
