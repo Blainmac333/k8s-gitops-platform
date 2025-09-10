@@ -61,6 +61,19 @@ jobs:
     needs: build-and-push
     runs-on: [self-hosted, Linux, ARM64]
     steps:
+      - name: Sync repo files on Pi
+        run: |
+          set -e
+          cd ~/apps/devops-qr
+          if [ -d .git ]; then
+            # make sure git won't complain about ownership
+            git config --global --add safe.directory "$(pwd)" || true
+            git fetch --all
+            git reset --hard origin/master
+          else
+            echo "WARNING: ~/apps/devops-qr is not a git repo. Skipping sync."
+          fi
+
       - name: Pull and restart stack on Pi
         run: |
           set -e
