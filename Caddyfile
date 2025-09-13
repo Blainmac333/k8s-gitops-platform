@@ -1,24 +1,23 @@
 {
-  # absolutely disable HTTPS at the origin
+  # Cloudflare Tunnel terminates TLS; keep origin HTTP-only.
   auto_https off
 }
 
-# one HTTP-only server
-http://:80 {
-  # CV vhost (match by Host header)
-  @cv host cv.blainweb.com
-  handle @cv {
-    root * /srv/cv
-    file_server
-  }
-
-  # API
+:80 {
+  # Backend routes
   handle_path /api/* {
     reverse_proxy backend:8000
   }
-
-  # everything else -> frontend
-  handle {
-    reverse_proxy frontend:3000
+  handle_path /qrs/* {
+    reverse_proxy backend:8000
   }
+
+  # Everything else => Next.js frontend
+  reverse_proxy frontend:3000
+}
+
+# CV site — HTTP only at origin (Cloudflare provides TLS to the world)
+http://cv.blainweb.com {
+  root * /srv/cv
+  file_server
 }
