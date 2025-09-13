@@ -1,0 +1,11 @@
+﻿tunnel: qr-pi
+credentials-file: /etc/cloudflared/{{CREDENTIALS_JSON}}
+
+ingress:
+  - hostname: qr.blainweb.com
+    service: http://localhost:80
+  - hostname: cv.blainweb.com
+    service: http://localhost:80
+  - hostname: grafana.blainweb.com
+    service: http://localhost:80
+  - service: http_status:404
