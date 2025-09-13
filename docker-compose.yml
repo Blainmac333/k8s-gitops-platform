@@ -3,10 +3,10 @@ services:
     image: caddy:2
     container_name: qr-proxy
     ports:
-      - "80:80"     # later you can switch to "127.0.0.1:80:80" after the tunnel works
+      - "80:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./cv-site:/srv/cv:ro        # <-- serve your CV files here
+      - ./cv-site:/srv/cv:ro        # <-- this one serves your CV files
     depends_on:
       - frontend
       - backend
