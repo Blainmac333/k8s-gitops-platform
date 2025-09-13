@@ -21,3 +21,7 @@ http://cv.blainweb.com {
   root * /srv/cv
   file_server
 }
+
+http://grafana.blainweb.com {
+  reverse_proxy grafana:3000
+}
