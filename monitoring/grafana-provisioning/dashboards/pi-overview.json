@@ -1,0 +1,111 @@
+{
+  "uid": "pi-overview",
+  "title": "Pi & Containers Overview",
+  "timezone": "",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "tags": ["pi", "containers", "ops"],
+  "panels": [
+    {
+      "type": "gauge",
+      "title": "CPU Usage %",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false } },
+      "targets": [
+        { "expr": "100 - avg(irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100", "legendFormat": "CPU" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "type": "gauge",
+      "title": "Memory Used %",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false } },
+      "targets": [
+        { "expr": "(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100", "legendFormat": "Mem" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "type": "gauge",
+      "title": "Root Disk Used %",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false } },
+      "targets": [
+        {
+          "expr": "(1 - node_filesystem_avail_bytes{mountpoint=\"/\",fstype!~\"tmpfs|overlay\"} / node_filesystem_size_bytes{mountpoint=\"/\",fstype!~\"tmpfs|overlay\"}) * 100",
+          "legendFormat": "Disk"
+        }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Network RX/TX (bytes/sec)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] },
+      "options": { "legend": { "showLegend": true, "placement": "bottom" } },
+      "targets": [
+        { "expr": "rate(node_network_receive_bytes_total{device!~\"lo\"}[5m])", "legendFormat": "{{device}} rx" },
+        { "expr": "rate(node_network_transmit_bytes_total{device!~\"lo\"}[5m])", "legendFormat": "{{device}} tx" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "type": "bargauge",
+      "title": "Top 5 Containers by CPU %",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0 }, "overrides": [] },
+      "options": { "displayMode": "basic" },
+      "targets": [
+        { "expr": "topk(5, 100 * sum(rate(container_cpu_usage_seconds_total{image!=\"\"}[5m])) by (name))", "legendFormat": "{{name}}" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "type": "bargauge",
+      "title": "Top 5 Containers by Memory",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "bytes", "min": 0 }, "overrides": [] },
+      "options": { "displayMode": "basic" },
+      "targets": [
+        { "expr": "topk(5, sum(container_memory_working_set_bytes{image!=\"\"}) by (name))", "legendFormat": "{{name}}" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "type": "stat",
+      "title": "Targets Up",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 24 },
+      "fieldConfig": { "defaults": { "unit": "none" }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "sum(up)", "legendFormat": "up" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "container",
+        "type": "query",
+        "label": "Container",
+        "query": {
+          "query": "label_values(container_memory_working_set_bytes{image!=\"\"}, name)",
+          "refId": "VarQuery"
+        },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "refresh": 2,
+        "hide": 0,
+        "multi": true,
+        "includeAll": true
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" }
+}
