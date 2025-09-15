@@ -2,7 +2,7 @@ apiVersion: 1
 providers:
   - name: 'Pi & Containers Overview'
     orgId: 1
-    folder: 'General'       
+    folder: 'General'
     type: file
     disableDeletion: false
     editable: true
