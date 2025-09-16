@@ -100,10 +100,21 @@ jobs:
           fi
           docker image prune -f || true
 
-      # Optional: if Grafana was already initialized, ensure the admin password matches the secret
+      # Force Grafana to reload provisioning (dashboards & datasources)
+      - name: Restart Grafana to pick up provisioning
+        run: |
+          docker restart grafana || true
+
+      # Optional: ensure admin password matches the secret
       - name: Ensure Grafana admin password
         run: |
           docker exec grafana grafana-cli admin reset-admin-password '${{ secrets.GRAFANA_ADMIN_PASSWORD }}' || true
+
+      # Optional: quick log peek so provisioning issues are visible in CI
+      - name: Check Grafana provisioning logs (non-blocking)
+        run: |
+          sleep 3
+          docker logs --since=30s grafana | sed -n '/provision/Ip' || true
 
       # Optional: reload Caddy to pick up any Caddyfile changes
       - name: Reload Caddy config
