@@ -1,7 +1,8 @@
 {
+  "id": null,
   "uid": "pi-overview",
   "title": "Pi & Containers Overview",
-  "timezone": "",
+  "timezone": "browser",
   "schemaVersion": 39,
   "version": 1,
   "refresh": "30s",
@@ -11,7 +12,7 @@
       "type": "gauge",
       "title": "CPU Usage %",
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false } },
       "targets": [
         { "expr": "100 - avg(irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100", "legendFormat": "CPU" }
@@ -22,7 +23,7 @@
       "type": "gauge",
       "title": "Memory Used %",
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false } },
       "targets": [
         { "expr": "(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100", "legendFormat": "Mem" }
@@ -33,7 +34,7 @@
       "type": "gauge",
       "title": "Root Disk Used %",
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false } },
       "targets": [
         {
@@ -43,11 +44,12 @@
       ],
       "datasource": { "type": "prometheus", "uid": "prometheus" }
     },
+
     {
       "type": "timeseries",
       "title": "Network RX/TX (bytes/sec)",
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
-      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
       "options": { "legend": { "showLegend": true, "placement": "bottom" } },
       "targets": [
         { "expr": "rate(node_network_receive_bytes_total{device!~\"lo\"}[5m])", "legendFormat": "{{device}} rx" },
@@ -55,11 +57,12 @@
       ],
       "datasource": { "type": "prometheus", "uid": "prometheus" }
     },
+
     {
       "type": "bargauge",
       "title": "Top 5 Containers by CPU %",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-      "fieldConfig": { "defaults": { "unit": "percent", "min": 0 }, "overrides": [] },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0 } },
       "options": { "displayMode": "basic" },
       "targets": [
         { "expr": "topk(5, 100 * sum(rate(container_cpu_usage_seconds_total{image!=\"\"}[5m])) by (name))", "legendFormat": "{{name}}" }
@@ -70,21 +73,101 @@
       "type": "bargauge",
       "title": "Top 5 Containers by Memory",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-      "fieldConfig": { "defaults": { "unit": "bytes", "min": 0 }, "overrides": [] },
+      "fieldConfig": { "defaults": { "unit": "bytes", "min": 0 } },
       "options": { "displayMode": "basic" },
       "targets": [
         { "expr": "topk(5, sum(container_memory_working_set_bytes{image!=\"\"}) by (name))", "legendFormat": "{{name}}" }
       ],
       "datasource": { "type": "prometheus", "uid": "prometheus" }
     },
+
     {
       "type": "stat",
       "title": "Targets Up",
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 24 },
-      "fieldConfig": { "defaults": { "unit": "none" }, "overrides": [] },
+      "fieldConfig": { "defaults": { "unit": "none" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [ { "expr": "sum(up)", "legendFormat": "up" } ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "type": "stat",
+      "title": "Uptime (seconds)",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 24 },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [ { "expr": "time() - node_boot_time_seconds", "legendFormat": "uptime" } ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "type": "stat",
+      "title": "Prometheus Samples/s",
+      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 24 },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
-        { "expr": "sum(up)", "legendFormat": "up" }
+        { "expr": "rate(prometheus_tsdb_head_samples_appended_total[5m])", "legendFormat": "samples/s" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+
+    {
+      "type": "timeseries",
+      "title": "System Load (1/5/15m)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "options": { "legend": { "showLegend": true, "placement": "bottom" } },
+      "targets": [
+        { "expr": "node_load1", "legendFormat": "load1" },
+        { "expr": "node_load5", "legendFormat": "load5" },
+        { "expr": "node_load15", "legendFormat": "load15" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "type": "gauge",
+      "title": "CPU Temperature (°C)",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 28 },
+      "fieldConfig": { "defaults": { "unit": "celsius", "min": 0 } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false } },
+      "targets": [
+        { "expr": "max(node_hwmon_temp_celsius) or max(node_thermal_zone_temp)", "legendFormat": "temp" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Disk I/O (bytes/sec)",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 28 },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "options": { "legend": { "showLegend": true, "placement": "bottom" } },
+      "targets": [
+        { "expr": "sum by (device) (rate(node_disk_read_bytes_total{device=~\"sd.*|mmcblk.*\"}[5m]))", "legendFormat": "{{device}} read" },
+        { "expr": "sum by (device) (rate(node_disk_written_bytes_total{device=~\"sd.*|mmcblk.*\"}[5m]))", "legendFormat": "{{device}} write" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+
+    {
+      "type": "bargauge",
+      "title": "Top 5 Containers by FS Usage",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "fieldConfig": { "defaults": { "unit": "bytes", "min": 0 } },
+      "options": { "displayMode": "basic" },
+      "targets": [
+        { "expr": "topk(5, sum(container_fs_usage_bytes{image!=\"\"}) by (name))", "legendFormat": "{{name}}" }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Network Errors (rx/tx)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "fieldConfig": { "defaults": { "unit": "ops" } },
+      "options": { "legend": { "showLegend": true, "placement": "bottom" } },
+      "targets": [
+        { "expr": "rate(node_network_receive_errs_total{device!=\"lo\"}[5m])", "legendFormat": "{{device}} rx_err" },
+        { "expr": "rate(node_network_transmit_errs_total{device!=\"lo\"}[5m])", "legendFormat": "{{device}} tx_err" }
       ],
       "datasource": { "type": "prometheus", "uid": "prometheus" }
     }
@@ -95,10 +178,7 @@
         "name": "container",
         "type": "query",
         "label": "Container",
-        "query": {
-          "query": "label_values(container_memory_working_set_bytes{image!=\"\"}, name)",
-          "refId": "VarQuery"
-        },
+        "query": { "query": "label_values(container_memory_working_set_bytes{image!=\"\"}, name)", "refId": "VarQuery" },
         "datasource": { "type": "prometheus", "uid": "prometheus" },
         "refresh": 2,
         "hide": 0,
@@ -107,5 +187,6 @@
       }
     ]
   },
-  "time": { "from": "now-6h", "to": "now" }
+  "time": { "from": "now-6h", "to": "now" },
+  "annotations": { "list": [ { "builtIn": 1, "type": "dashboard", "name": "Annotations & Alerts", "hide": true } ] }
 }
