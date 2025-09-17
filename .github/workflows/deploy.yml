@@ -102,21 +102,42 @@ jobs:
 
       # Force Grafana to reload provisioning (dashboards & datasources)
       - name: Restart Grafana to pick up provisioning
+        run: docker restart grafana || true
+
+      # Wait until /api/health returns OK from the same network (no need for curl inside Grafana)
+      - name: Wait for Grafana health
         run: |
-          docker restart grafana || true
+          set -e
+          NET=$(docker inspect grafana --format '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -n1)
+          for i in $(seq 1 20); do
+            if docker run --rm --network "$NET" curlimages/curl:8.8.0 -sf http://grafana:3000/api/health > /dev/null; then
+              echo "Grafana healthy"; exit 0
+            fi
+            sleep 2
+          done
+          echo "Grafana failed health check"
+          docker logs --since=2m grafana || true
+          exit 1
 
       # Optional: ensure admin password matches the secret
       - name: Ensure Grafana admin password
         run: |
           docker exec grafana grafana-cli admin reset-admin-password '${{ secrets.GRAFANA_ADMIN_PASSWORD }}' || true
 
-      # Optional: quick log peek so provisioning issues are visible in CI
+      # Show exactly what Grafana sees (non-blocking)
+      - name: Proving what Grafana sees (non-blocking)
+        run: |
+          docker exec grafana sh -lc '
+            echo "== datasources =="; ls -lah /etc/grafana/provisioning/datasources;
+            echo "== dashboards ==";  ls -lah /etc/grafana/provisioning/dashboards;
+          ' || true
+
+      # Quick log peek for provisioning (non-blocking)
       - name: Check Grafana provisioning logs (non-blocking)
         run: |
-          sleep 3
-          docker logs --since=30s grafana | sed -n '/provision/Ip' || true
+          docker logs --since=2m grafana | sed -n '/provision/Ip' || true
 
-      # Optional: reload Caddy to pick up any Caddyfile changes
+      # Reload Caddy to pick up any Caddyfile changes
       - name: Reload Caddy config
         run: |
           docker exec qr-proxy caddy reload --config /etc/caddy/Caddyfile || true
