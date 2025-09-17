@@ -73,6 +73,24 @@ jobs:
             echo "WARNING: ~/apps/devops-qr is not a git repo. Skipping sync."
           fi
 
+      # --- NEW: keep provisioning dirs clean on every deploy ---
+      - name: Remove untracked provisioning files
+        run: |
+          set -e
+          cd ~/apps/devops-qr
+          git clean -fd monitoring/grafana-provisioning/datasources
+          git clean -fd monitoring/grafana-provisioning/dashboards
+
+      - name: Guard Grafana datasource provisioning
+        run: |
+          set -e
+          cd ~/apps/devops-qr/monitoring/grafana-provisioning/datasources
+          echo "Files:"; ls -1
+          CNT_FILES=$(ls -1 *.y*ml 2>/dev/null | wc -l | xargs)
+          [ "$CNT_FILES" -eq 1 ] || { echo "Expected exactly one datasource YAML, found $CNT_FILES"; exit 1; }
+          CNT_DEF=$(grep -Rsc --include='*.y*ml' '^ *isDefault: *true' . | awk -F: '{s+=$2} END{print s+0}')
+          [ "$CNT_DEF" -eq 1 ] || { echo "Expected exactly one isDefault:true, found $CNT_DEF"; exit 1; }
+
       - name: Write grafana.env from secrets
         run: |
           set -e
@@ -104,7 +122,7 @@ jobs:
       - name: Restart Grafana to pick up provisioning
         run: docker restart grafana || true
 
-      # Wait until /api/health returns OK from the same network (no need for curl inside Grafana)
+      # Wait until /api/health returns OK from the same network
       - name: Wait for Grafana health
         run: |
           set -e
