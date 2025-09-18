@@ -1,13 +1,12 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, AnyHttpUrl, Field, ConfigDict
 import qrcode
 import os
 import hashlib
 from io import BytesIO
 
-# Load .env if present
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -17,9 +16,11 @@ app = FastAPI()
 FRONTEND_URL_ENV = os.getenv("FRONTEND_URL", "http://localhost:3000")
 ALLOWED_ORIGINS = {
     FRONTEND_URL_ENV,
-    "http://192.168.1.105:3000",     # your Pi frontend
-    "http://raspberrypi.local:3000", # optional
+    "http://192.168.1.105:3000",
+    "http://raspberrypi.local:3000",
     "http://localhost:3000",
+    # optional prod origin (same-origin calls usually don't hit CORS, but harmless to allow)
+    "https://qr.blainweb.com",
 }
 app.add_middleware(
     CORSMiddleware,
@@ -31,14 +32,16 @@ app.add_middleware(
 
 # ---------- Local storage ----------
 LOCAL_STORAGE_DIR = os.getenv("LOCAL_STORAGE_DIR", "/data/qrs")
-os.makedirs(LOCAL_STORAGE_DIR, exist_ok=True)  # ensure directory exists
+os.makedirs(LOCAL_STORAGE_DIR, exist_ok=True)
 
 # Serve files at /qrs/<file.png>
 app.mount("/qrs", StaticFiles(directory=LOCAL_STORAGE_DIR), name="qrs")
 
 # ---------- Request model ----------
 class QRRequest(BaseModel):
-    url: str
+    # Accepts {"url": "..."} and also {"text": "..."} (frontend sends "text")
+    url: AnyHttpUrl = Field(alias="text")
+    model_config = ConfigDict(populate_by_name=True)
 
 # ---------- Endpoint ----------
 @app.post("/generate-qr")
@@ -58,7 +61,7 @@ async def generate_qr(payload: QRRequest, request: Request):
         qr.make(fit=True)
         img = qr.make_image(fill_color="black", back_color="white")
 
-        # Create a stable, safe filename
+        # Stable filename
         digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
         filename = f"qr_{digest}.png"
         filepath = os.path.join(LOCAL_STORAGE_DIR, filename)
