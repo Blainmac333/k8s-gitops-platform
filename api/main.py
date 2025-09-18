@@ -47,7 +47,7 @@ class QRRequest(BaseModel):
 @app.post("/generate-qr")
 @app.post("/generate-qr/")
 async def generate_qr(payload: QRRequest, request: Request):
-    url = payload.url
+    url = str(payload.url)
 
     try:
         # Build QR
