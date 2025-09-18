@@ -4,11 +4,13 @@
 }
 
 :80 {
-  # Backend routes
+  # API: strip /api before sending to backend
   handle_path /api/* {
     reverse_proxy backend:8000
   }
-  handle_path /qrs/* {
+
+  # QR images: DO NOT strip /qrs – preserve the path
+  handle /qrs/* {
     reverse_proxy backend:8000
   }
 
