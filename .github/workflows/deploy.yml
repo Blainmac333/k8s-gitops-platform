@@ -73,7 +73,7 @@ jobs:
             echo "WARNING: ~/apps/devops-qr is not a git repo. Skipping sync."
           fi
 
-      # --- NEW: keep provisioning dirs clean on every deploy ---
+      # --- keep provisioning dirs clean on every deploy ---
       - name: Remove untracked provisioning files
         run: |
           set -e
@@ -155,7 +155,25 @@ jobs:
         run: |
           docker logs --since=2m grafana | sed -n '/provision/Ip' || true
 
-      # Reload Caddy to pick up any Caddyfile changes
-      - name: Reload Caddy config
+      # ---------- NEW: Caddy drift protection + smoke test ----------
+      - name: Force-reload Caddy config
+        run: docker exec qr-proxy caddy reload --config /etc/caddy/Caddyfile || (docker logs qr-proxy && exit 1)
+
+      - name: Verify /qrs rule is correct
         run: |
-          docker exec qr-proxy caddy reload --config /etc/caddy/Caddyfile || true
+          docker exec qr-proxy sh -lc 'grep -n "handle /qrs/*" /etc/caddy/Caddyfile' \
+            || (echo "Expected 'handle /qrs/*' not found in active Caddyfile"; exit 1)
+
+      - name: QR API smoke test
+        run: |
+          set -e
+          JSON=$(curl -sS -H 'Host: qr.blainweb.com' -H 'content-type: application/json' \
+                 --data '{"text":"https://www.youtube.com/"}' \
+                 http://localhost/api/generate-qr)
+          echo "$JSON"
+          # Extract qr_code_url without jq
+          URL=$(printf '%s' "$JSON" | sed -n 's/.*"qr_code_url":"\([^"]*\)".*/\1/p')
+          [ -n "$URL" ] && [ "$URL" != "null" ] || { echo "No qr_code_url in response"; exit 1; }
+          CODE=$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: qr.blainweb.com' "$URL")
+          echo "PNG status: $CODE"
+          [ "$CODE" = "200" ] || exit 1
