@@ -1,29 +1,19 @@
 {
-  # Cloudflare Tunnel terminates TLS; keep origin HTTP-only.
   auto_https off
 }
 
-:80 {
-  # API: strip /api before sending to backend
-  handle_path /api/* {
-    reverse_proxy backend:8000
-  }
-
-  # QR images: DO NOT strip /qrs – preserve the path
-  handle /qrs/* {
-    reverse_proxy backend:8000
-  }
-
-  # Everything else => Next.js frontend
-  reverse_proxy frontend:3000
+# QR app via k3s/Traefik NodePort
+http://qr.blainweb.com {
+  reverse_proxy host.docker.internal:30080
 }
 
-# CV site — HTTP only at origin (Cloudflare provides TLS to the world)
+# CV site — HTTP only at origin
 http://cv.blainweb.com {
   root * /srv/cv
   file_server
 }
 
+# Grafana still via Docker
 http://grafana.blainweb.com {
   reverse_proxy grafana:3000
 }
