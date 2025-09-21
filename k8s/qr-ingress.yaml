@@ -1,0 +1,51 @@
+# k8s/qr-ingress.yaml
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: api-strip
+  namespace: qr
+spec:
+  stripPrefix:
+    prefixes:
+      - /api
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: qr
+  namespace: qr
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+    - host: qr.blainweb.com
+      http:
+        paths:
+          # /api/* -> backend (strip /api)
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: qr-backend
+                port:
+                  number: 8000
+            # attach strip middleware
+            # (Traefik v3 picks this annotation from the Ingress itself)
+            # If it doesn't in your version, use an IngressRoute instead (below).
+          # /qrs/* -> backend (NO strip)
+          - path: /qrs
+            pathType: Prefix
+            backend:
+              service:
+                name: qr-backend
+                port:
+                  number: 8000
+          # everything else -> frontend
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: qr-frontend
+                port:
+                  number: 3000

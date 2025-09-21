@@ -1,0 +1,43 @@
+# k8s/qr-backend.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qr-backend
+  namespace: qr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qr-backend
+  template:
+    metadata:
+      labels:
+        app: qr-backend
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: backend
+          image: ghcr.io/YOUR_OWNER/qr-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          # if you write PNGs to disk, persist them:
+          volumeMounts:
+            - name: qrs
+              mountPath: /app/qrs
+      volumes:
+        - name: qrs
+          emptyDir: {}   # replace with a PVC if you need persistence across pod restarts
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qr-backend
+  namespace: qr
+spec:
+  selector:
+    app: qr-backend
+  ports:
+    - port: 8000
+      targetPort: 8000
