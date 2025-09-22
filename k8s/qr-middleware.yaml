@@ -5,6 +5,5 @@ metadata:
   namespace: qr
 spec:
   stripPrefix:
-    forceSlash: true
     prefixes:
       - /api
