@@ -10,9 +10,9 @@ spec:
   ports:
     - name: web
       port: 80
-      targetPort: 80
+      targetPort: 8000     # <- was 80
       nodePort: 30080
     - name: websecure
       port: 443
-      targetPort: 443
+      targetPort: 8443     # <- was 443
       nodePort: 30443
