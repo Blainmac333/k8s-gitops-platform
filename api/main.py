@@ -19,7 +19,6 @@ ALLOWED_ORIGINS = {
     "http://192.168.1.105:3000",
     "http://raspberrypi.local:3000",
     "http://localhost:3000",
-    # optional prod origin (same-origin calls usually don't hit CORS, but harmless to allow)
     "https://qr.blainweb.com",
 }
 app.add_middleware(
@@ -37,9 +36,13 @@ os.makedirs(LOCAL_STORAGE_DIR, exist_ok=True)
 # Serve files at /qrs/<file.png>
 app.mount("/qrs", StaticFiles(directory=LOCAL_STORAGE_DIR), name="qrs")
 
+# ---------- Health endpoints ----------
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 # ---------- Request model ----------
 class QRRequest(BaseModel):
-    # Accepts {"url": "..."} and also {"text": "..."} (frontend sends "text")
     url: AnyHttpUrl = Field(alias="text")
     model_config = ConfigDict(populate_by_name=True)
 
