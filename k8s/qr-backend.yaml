@@ -17,8 +17,8 @@ spec:
       imagePullSecrets:
         - name: ghcr-pull
       containers:
-        - name: backend
-          image: ghcr.io/YOUR_OWNER/qr-backend:latest
+        - name: qr-backend
+          image: ghcr.io/blainmac333/qr-backend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
