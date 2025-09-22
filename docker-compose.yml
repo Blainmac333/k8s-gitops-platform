@@ -4,12 +4,11 @@ services:
     container_name: qr-proxy
     ports:
       - "80:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./cv-site:/srv/cv:ro
-    depends_on:
-      - frontend
-      - backend
     restart: unless-stopped
 
   backend:
