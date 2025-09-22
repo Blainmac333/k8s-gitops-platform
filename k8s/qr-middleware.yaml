@@ -1,4 +1,3 @@
-# k8s/qr-middleware.yaml
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
@@ -6,5 +5,6 @@ metadata:
   namespace: qr
 spec:
   stripPrefix:
+    forceSlash: true
     prefixes:
       - /api
