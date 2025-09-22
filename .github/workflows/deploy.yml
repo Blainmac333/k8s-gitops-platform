@@ -102,7 +102,7 @@ jobs:
           EOF
           chmod 600 grafana.env
 
-      - name: Pull and restart stack on Pi
+      - name: Pull and restart stack on Pi (Docker services like Grafana)
         run: |
           set -e
           cd ~/apps/devops-qr
@@ -118,11 +118,9 @@ jobs:
           fi
           docker image prune -f || true
 
-      # Force Grafana to reload provisioning (dashboards & datasources)
       - name: Restart Grafana to pick up provisioning
         run: docker restart grafana || true
 
-      # Wait until /api/health returns OK from the same network
       - name: Wait for Grafana health
         run: |
           set -e
@@ -137,41 +135,39 @@ jobs:
           docker logs --since=2m grafana || true
           exit 1
 
-      # Optional: ensure admin password matches the secret
       - name: Ensure Grafana admin password
-        run: |
-          docker exec grafana grafana-cli admin reset-admin-password '${{ secrets.GRAFANA_ADMIN_PASSWORD }}' || true
+        run: docker exec grafana grafana-cli admin reset-admin-password '${{ secrets.GRAFANA_ADMIN_PASSWORD }}' || true
 
-      # Show exactly what Grafana sees (non-blocking)
-      - name: Proving what Grafana sees (non-blocking)
+      # ---------- k3s: apply manifests & pin images to this commit ----------
+      - name: Apply k8s manifests
         run: |
-          docker exec grafana sh -lc '
-            echo "== datasources =="; ls -lah /etc/grafana/provisioning/datasources;
-            echo "== dashboards ==";  ls -lah /etc/grafana/provisioning/dashboards;
-          ' || true
+          set -e
+          cd ~/apps/devops-qr
+          kubectl apply -R -f k8s/
 
-      # Quick log peek for provisioning (non-blocking)
-      - name: Check Grafana provisioning logs (non-blocking)
+      - name: Point Deployments at exact images for this commit
         run: |
-          docker logs --since=2m grafana | sed -n '/provision/Ip' || true
+          set -e
+          kubectl -n qr set image deploy/qr-backend  qr-backend=ghcr.io/blainmac333/qr-backend:${{ github.sha }}
+          kubectl -n qr set image deploy/qr-frontend qr-frontend=ghcr.io/blainmac333/qr-frontend:${{ github.sha }}
 
-      # ---------- NEW: Caddy drift protection + smoke test ----------
-      - name: Force-reload Caddy config
+      - name: Wait for k8s rollouts
+        run: |
+          set -e
+          kubectl -n qr rollout status deploy/qr-backend
+          kubectl -n qr rollout status deploy/qr-frontend
+
+      # ---------- Caddy: reload + end-to-end smoke test ----------
+      - name: Reload Caddy config
         run: docker exec qr-proxy caddy reload --config /etc/caddy/Caddyfile || (docker logs qr-proxy && exit 1)
 
-      - name: Verify /qrs rule is correct
-        run: |
-          docker exec qr-proxy sh -lc 'grep -n "handle /qrs/*" /etc/caddy/Caddyfile' \
-            || (echo "Expected 'handle /qrs/*' not found in active Caddyfile"; exit 1)
-
-      - name: QR API smoke test
+      - name: End-to-end QR API smoke test (Caddy -> Traefik -> k3s)
         run: |
           set -e
           JSON=$(curl -sS -H 'Host: qr.blainweb.com' -H 'content-type: application/json' \
                  --data '{"text":"https://www.youtube.com/"}' \
                  http://localhost/api/generate-qr)
           echo "$JSON"
-          # Extract qr_code_url without jq
           URL=$(printf '%s' "$JSON" | sed -n 's/.*"qr_code_url":"\([^"]*\)".*/\1/p')
           [ -n "$URL" ] && [ "$URL" != "null" ] || { echo "No qr_code_url in response"; exit 1; }
           CODE=$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: qr.blainweb.com' "$URL")
