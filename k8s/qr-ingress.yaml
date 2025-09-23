@@ -9,8 +9,13 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
     traefik.ingress.kubernetes.io/router.middlewares: qr-qr-api-strip@kubernetescrd
+    cert-manager.io/cluster-issuer: letsencrypt
 spec:
   ingressClassName: traefik
+  tls:
+    - hosts:
+        - qr.blainweb.com
+      secretName: qr-blainweb-tls
   rules:
     - host: qr.blainweb.com
       http:
@@ -21,7 +26,7 @@ spec:
               service:
                 name: qr-backend
                 port:
-                  number: 8000   # (use 80 here if your Service exposes 80)
+                  number: 8000
 ---
 # Ingress for everything else (no strip)
 apiVersion: networking.k8s.io/v1
@@ -31,8 +36,14 @@ metadata:
   namespace: qr
   labels:
     app: qr
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
 spec:
   ingressClassName: traefik
+  tls:
+    - hosts:
+        - qr.blainweb.com
+      secretName: qr-blainweb-tls
   rules:
     - host: qr.blainweb.com
       http:
