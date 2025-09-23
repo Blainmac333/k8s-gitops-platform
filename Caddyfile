@@ -2,9 +2,28 @@
   auto_https off
 }
 
-# QR app via k3s/Traefik NodePort
+# QR app → Traefik LB (MetalLB) on port 80
 http://qr.blainweb.com {
-  reverse_proxy host.docker.internal:30080
+    # Let’s Encrypt HTTP-01 challenge must reach cert-manager’s solver Ingress
+    handle_path /.well-known/acme-challenge/* {
+        reverse_proxy 192.168.1.220:80 {
+            header_up Host {host}
+        }
+    }
+
+    # API to Traefik
+    handle /api* {
+        reverse_proxy 192.168.1.220:80 {
+            header_up Host {host}
+        }
+    }
+
+    # Everything else (frontend/static) to Traefik
+    handle {
+        reverse_proxy 192.168.1.220:80 {
+            header_up Host {host}
+        }
+    }
 }
 
 # CV site — HTTP only at origin
