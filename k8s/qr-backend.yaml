@@ -22,13 +22,43 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
-          # if you write PNGs to disk, persist them:
+          # ---- Config / Secrets as env ----
+          env:
+            # Frontend origin for CORS (adjust to http:// if you don't use TLS yet)
+            - name: FRONTEND_URL
+              valueFrom:
+                secretKeyRef: { name: qr-env, key: FRONTEND_URL }
+            # Public base URL where QR PNGs are served
+            - name: QR_CODE_URL
+              valueFrom:
+                secretKeyRef: { name: qr-env, key: QR_CODE_URL }
+            # Make the storage dir explicit and match the volume mount
+            - name: LOCAL_STORAGE_DIR
+              value: /data/qrs
+          # ---- Probes (stability) ----
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          # ---- Resources (keep the Pi happy) ----
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          # Persist generated PNGs inside the pod lifecycle
           volumeMounts:
             - name: qrs
-              mountPath: /app/qrs
+              mountPath: /data/qrs
       volumes:
         - name: qrs
-          emptyDir: {}   # replace with a PVC if you need persistence across pod restarts
+          emptyDir: {}   # Replace with a PVC if you need persistence across pod restarts
 ---
 apiVersion: v1
 kind: Service
