@@ -2,9 +2,7 @@
   auto_https off
 }
 
-# QR app via Caddy -> Traefik/NodePort
 http://qr.blainweb.com {
-
   # ACME challenge must hit Traefik LB (MetalLB IP)
   handle_path /.well-known/acme-challenge/* {
     reverse_proxy 192.168.1.220:80 {
@@ -12,16 +10,16 @@ http://qr.blainweb.com {
     }
   }
 
-  # API → use NodePort so the CI test (curl http://localhost …) is stable
+  # API via NodePort on the host (reachable from container via host-gateway)
   handle /api* {
-    reverse_proxy 127.0.0.1:30080 {
+    reverse_proxy host.docker.internal:30080 {
       header_up Host {host}
     }
   }
 
-  # everything else (frontend/static) → NodePort as well
+  # everything else (frontend/static) via NodePort too
   handle {
-    reverse_proxy 127.0.0.1:30080 {
+    reverse_proxy host.docker.internal:30080 {
       header_up Host {host}
     }
   }
