@@ -58,118 +58,118 @@ jobs:
             ghcr.io/${{ env.OWNER_LC }}/qr-frontend:${{ github.sha }}
 
   deploy:
-    needs: build-and-push
-    runs-on: [self-hosted, Linux, ARM64]
-    steps:
-      - name: Sync repo files on Pi
-        run: |
-          set -e
-          cd ~/apps/devops-qr
-          if [ -d .git ]; then
-            git config --global --add safe.directory "$(pwd)" || true
-            git fetch --all
-            git reset --hard origin/master
-          else
-            echo "WARNING: ~/apps/devops-qr is not a git repo. Skipping sync."
-          fi
-
-      # --- keep provisioning dirs clean on every deploy ---
-      - name: Remove untracked provisioning files
-        run: |
-          set -e
-          cd ~/apps/devops-qr
-          git clean -fd monitoring/grafana-provisioning/datasources
-          git clean -fd monitoring/grafana-provisioning/dashboards
-
-      - name: Guard Grafana datasource provisioning
-        run: |
-          set -e
-          cd ~/apps/devops-qr/monitoring/grafana-provisioning/datasources
-          echo "Files:"; ls -1
-          CNT_FILES=$(ls -1 *.y*ml 2>/dev/null | wc -l | xargs)
-          [ "$CNT_FILES" -eq 1 ] || { echo "Expected exactly one datasource YAML, found $CNT_FILES"; exit 1; }
-          CNT_DEF=$(grep -Rsc --include='*.y*ml' '^ *isDefault: *true' . | awk -F: '{s+=$2} END{print s+0}')
-          [ "$CNT_DEF" -eq 1 ] || { echo "Expected exactly one isDefault:true, found $CNT_DEF"; exit 1; }
-
-      - name: Write grafana.env from secrets
-        run: |
-          set -e
-          cd ~/apps/devops-qr
-          cat > grafana.env <<'EOF'
-          GF_SECURITY_ADMIN_USER=admin
-          GF_SECURITY_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}
-          GF_SERVER_ROOT_URL=https://grafana.blainweb.com
-          EOF
-          chmod 600 grafana.env
-
-      - name: Pull and restart stack on Pi (Docker services like Grafana)
-        run: |
-          set -e
-          cd ~/apps/devops-qr
-          if [ -n "${{ secrets.GHCR_PAT }}" ]; then
-            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
-          fi
-          if command -v docker-compose >/dev/null 2>&1; then
-            docker-compose pull
-            docker-compose up -d
-          else
-            docker compose pull
-            docker compose up -d
-          fi
-          docker image prune -f || true
-
-      - name: Restart Grafana to pick up provisioning
-        run: docker restart grafana || true
-
-      - name: Wait for Grafana health
-        run: |
-          set -e
-          NET=$(docker inspect grafana --format '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -n1)
-          for i in $(seq 1 20); do
-            if docker run --rm --network "$NET" curlimages/curl:8.8.0 -sf http://grafana:3000/api/health > /dev/null; then
-              echo "Grafana healthy"; exit 0
+      needs: build-and-push
+      runs-on: [self-hosted, Linux, ARM64]
+      steps:
+        - name: Sync repo files on Pi
+          run: |
+            set -e
+            cd ~/apps/devops-qr
+            if [ -d .git ]; then
+              git config --global --add safe.directory "$(pwd)" || true
+              git fetch --all
+              git reset --hard origin/master
+            else
+              echo "WARNING: ~/apps/devops-qr is not a git repo. Skipping sync."
             fi
-            sleep 2
-          done
-          echo "Grafana failed health check"
-          docker logs --since=2m grafana || true
-          exit 1
 
-      - name: Ensure Grafana admin password
-        run: docker exec grafana grafana-cli admin reset-admin-password '${{ secrets.GRAFANA_ADMIN_PASSWORD }}' || true
+        # --- keep provisioning dirs clean on every deploy ---
+        - name: Remove untracked provisioning files
+          run: |
+            set -e
+            cd ~/apps/devops-qr
+            git clean -fd monitoring/grafana-provisioning/datasources
+            git clean -fd monitoring/grafana-provisioning/dashboards
 
-      # ---------- k3s: apply manifests & pin images to this commit ----------
-      - name: Apply k8s manifests
-        run: |
-          set -e
-          cd ~/apps/devops-qr
-          kubectl apply -R -f k8s/
+        - name: Guard Grafana datasource provisioning
+          run: |
+            set -e
+            cd ~/apps/devops-qr/monitoring/grafana-provisioning/datasources
+            echo "Files:"; ls -1
+            CNT_FILES=$(ls -1 *.y*ml 2>/dev/null | wc -l | xargs)
+            [ "$CNT_FILES" -eq 1 ] || { echo "Expected exactly one datasource YAML, found $CNT_FILES"; exit 1; }
+            CNT_DEF=$(grep -Rsc --include='*.y*ml' '^ *isDefault: *true' . | awk -F: '{s+=$2} END{print s+0}')
+            [ "$CNT_DEF" -eq 1 ] || { echo "Expected exactly one isDefault:true, found $CNT_DEF"; exit 1; }
 
-      - name: Point Deployments at exact images for this commit
-        run: |
-          set -e
-          kubectl -n qr set image deploy/qr-backend  qr-backend=ghcr.io/blainmac333/qr-backend:${{ github.sha }}
-          kubectl -n qr set image deploy/qr-frontend qr-frontend=ghcr.io/blainmac333/qr-frontend:${{ github.sha }}
+        - name: Write grafana.env from secrets
+          run: |
+            set -e
+            cd ~/apps/devops-qr
+            cat > grafana.env <<'EOF'
+            GF_SECURITY_ADMIN_USER=admin
+            GF_SECURITY_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+            GF_SERVER_ROOT_URL=https://grafana.blainweb.com
+            EOF
+            chmod 600 grafana.env
 
-      - name: Wait for k8s rollouts
-        run: |
-          set -e
-          kubectl -n qr rollout status deploy/qr-backend
-          kubectl -n qr rollout status deploy/qr-frontend
+        - name: Pull and restart stack on Pi (Docker services like Grafana)
+          run: |
+            set -e
+            cd ~/apps/devops-qr
+            if [ -n "${{ secrets.GHCR_PAT }}" ]; then
+              echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+            fi
+            if command -v docker-compose >/dev/null 2>&1; then
+              docker-compose pull
+              docker-compose up -d
+            else
+              docker compose pull
+              docker compose up -d
+            fi
+            docker image prune -f || true
 
-      # ---------- Caddy: reload + end-to-end smoke test ----------
-      - name: Reload Caddy config
-        run: docker exec qr-proxy caddy reload --config /etc/caddy/Caddyfile || (docker logs qr-proxy && exit 1)
+        - name: Restart Grafana to pick up provisioning
+          run: docker restart grafana || true
 
-      - name: End-to-end QR API smoke test (Caddy -> Traefik -> k3s)
-        run: |
-          set -e
-          JSON=$(curl -sS -H 'Host: qr.blainweb.com' -H 'content-type: application/json' \
-                 --data '{"text":"https://www.youtube.com/"}' \
-                 http://localhost/api/generate-qr)
-          echo "$JSON"
-          URL=$(printf '%s' "$JSON" | sed -n 's/.*"qr_code_url":"\([^"]*\)".*/\1/p')
-          [ -n "$URL" ] && [ "$URL" != "null" ] || { echo "No qr_code_url in response"; exit 1; }
-          CODE=$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: qr.blainweb.com' "$URL")
-          echo "PNG status: $CODE"
-          [ "$CODE" = "200" ] || exit 1
+        - name: Wait for Grafana health
+          run: |
+            set -e
+            NET=$(docker inspect grafana --format '{{range $k,$v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -n1)
+            for i in $(seq 1 20); do
+              if docker run --rm --network "$NET" curlimages/curl:8.8.0 -sf http://grafana:3000/api/health > /dev/null; then
+                echo "Grafana healthy"; exit 0
+              fi
+              sleep 2
+            done
+            echo "Grafana failed health check"
+            docker logs --since=2m grafana || true
+            exit 1
+
+        - name: Ensure Grafana admin password
+          run: docker exec grafana grafana-cli admin reset-admin-password '${{ secrets.GRAFANA_ADMIN_PASSWORD }}' || true
+
+        # ---------- k3s: apply manifests & pin images to this commit ----------
+        - name: Apply k8s manifests
+          run: |
+            set -e
+            cd ~/apps/devops-qr
+            kubectl apply -R -f k8s/
+
+        - name: Point Deployments at exact images for this commit
+          run: |
+            set -e
+            kubectl -n qr set image deploy/qr-backend  qr-backend=ghcr.io/blainmac333/qr-backend:${{ github.sha }}
+            kubectl -n qr set image deploy/qr-frontend qr-frontend=ghcr.io/blainmac333/qr-frontend:${{ github.sha }}
+
+        - name: Wait for k8s rollouts
+          run: |
+            set -e
+            kubectl -n qr rollout status deploy/qr-backend
+            kubectl -n qr rollout status deploy/qr-frontend
+
+        # ---------- Caddy: reload + end-to-end smoke test ----------
+        - name: Reload Caddy config
+          run: docker exec qr-proxy caddy reload --config /etc/caddy/Caddyfile || (docker logs qr-proxy && exit 1)
+
+        - name: End-to-end QR API smoke test (Caddy -> Traefik -> k3s)
+          run: |
+            set -e
+            JSON=$(curl -sS -H 'Host: qr.blainweb.com' -H 'content-type: application/json' \
+                  --data '{"text":"https://www.youtube.com/"}' \
+                  http://localhost/api/generate-qr)
+            echo "$JSON"
+            URL=$(printf '%s' "$JSON" | sed -n 's/.*"qr_code_url":"\([^"]*\)".*/\1/p')
+            [ -n "$URL" ] && [ "$URL" != "null" ] || { echo "No qr_code_url in response"; exit 1; }
+            CODE=$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: qr.blainweb.com' "$URL")
+            echo "PNG status: $CODE"
+            [ "$CODE" = "200" ] || exit 1
