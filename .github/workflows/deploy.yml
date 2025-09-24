@@ -159,17 +159,61 @@ jobs:
 
         # ---------- Caddy: reload + end-to-end smoke test ----------
         - name: Reload Caddy config
-          run: docker exec qr-proxy caddy reload --config /etc/caddy/Caddyfile || (docker logs qr-proxy && exit 1)
-
-        - name: End-to-end QR API smoke test (Caddy -> Traefik -> k3s)
           run: |
             set -e
-            JSON=$(curl -sS -H 'Host: qr.blainweb.com' -H 'content-type: application/json' \
-                  --data '{"text":"https://www.youtube.com/"}' \
-                  http://localhost/api/generate-qr)
-            echo "$JSON"
+            docker exec qr-proxy caddy reload --config /etc/caddy/Caddyfile
+            # give Caddy a moment to finish listeners / caches
+            sleep 2
+            
+        - name: End-to-end QR API smoke test (Caddy -> Traefik -> k3s)
+          shell: bash
+          run: |
+            set -euo pipefail
+
+            retry() {
+              local max="${1:-10}"; shift
+              local n=0
+              until "$@"; do
+                n=$((n+1))
+                if [[ "$n" -ge "$max" ]]; then
+                  echo "ERROR: command failed after $n attempts: $*"
+                  return 1
+                fi
+                sleep 2
+              done
+            }
+
+            echo "1) Wait for health (Caddy -> NodePort -> Traefik -> backend)"
+            retry 30 curl -sf -H 'Host: qr.blainweb.com' http://localhost/api/health
+
+            echo "2) Generate QR with retries"
+            JSON=""
+            gen() {
+              JSON=$(curl -sS -H 'Host: qr.blainweb.com' -H 'content-type: application/json' \
+                    --data '{"text":"https://www.youtube.com/"}' \
+                    http://localhost/api/generate-qr || true)
+              echo "JSON: $JSON"
+              local URL
+              URL=$(printf '%s' "$JSON" | sed -n 's/.*"qr_code_url":"\([^"]*\)".*/\1/p')
+              [[ -n "${URL:-}" && "$URL" != "null" ]]
+            }
+            retry 10 gen
+
             URL=$(printf '%s' "$JSON" | sed -n 's/.*"qr_code_url":"\([^"]*\)".*/\1/p')
-            [ -n "$URL" ] && [ "$URL" != "null" ] || { echo "No qr_code_url in response"; exit 1; }
-            CODE=$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: qr.blainweb.com' "$URL")
-            echo "PNG status: $CODE"
-            [ "$CODE" = "200" ] || exit 1
+            echo "QR URL: $URL"
+
+            echo "3) Fetch PNG with retries"
+            fetch_ok() {
+              CODE=$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: qr.blainweb.com' "$URL" || echo 000)
+              echo "PNG status: $CODE"
+              [[ "$CODE" == "200" ]]
+            }
+            if ! retry 10 fetch_ok; then
+              echo "--- Diagnostics (last 2m) ---"
+              docker logs --since=2m qr-proxy || true
+              kubectl -n kube-system get pods -l app.kubernetes.io/name=traefik -o wide || true
+              kubectl -n qr get pods -o wide || true
+              exit 1
+            fi
+
+            echo "Smoke test passed ✅"
