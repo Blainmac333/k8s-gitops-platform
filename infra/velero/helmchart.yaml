@@ -24,9 +24,11 @@ spec:
     configuration:
       provider: aws
       backupStorageLocation:
-        name: default
-        bucket: velero-blain-backups                  
-        config:
-          region: eu-central-003                        
-          s3Url: https://s3.eu-central-003.backblazeb2.com
-          s3ForcePathStyle: true
+        - name: default
+          provider: aws
+          bucket: velero-blain-backups
+          # prefix: optional/subfolder
+          config:
+            region: eu-central-003
+            s3Url: https://s3.eu-central-003.backblazeb2.com
+            s3ForcePathStyle: true
