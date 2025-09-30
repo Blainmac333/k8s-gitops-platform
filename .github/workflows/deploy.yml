@@ -138,14 +138,19 @@ jobs:
       - name: Ensure Grafana admin password
         run: docker exec grafana grafana-cli admin reset-admin-password '${{ secrets.GRAFANA_ADMIN_PASSWORD }}' || true
 
-              # -------- Velero (Backblaze B2) --------
+      # -------- Velero (Backblaze B2) --------
       - name: Ensure Velero namespace + credentials Secret
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
+          cd ~/apps/devops-qr
+
+          # Guard and idempotent apply
+          kubectl get ns velero >/dev/null 2>&1 || kubectl create ns velero
           kubectl apply -f infra/velero/namespace.yaml
 
-          # Create/patch secret with S3-compatible credentials in Velero's expected format
-          kubectl -n velero apply -f - <<'EOF'
+          # Credentials (expand env vars in heredoc)
+          kubectl -n velero apply -f - <<EOF
           apiVersion: v1
           kind: Secret
           metadata:
@@ -161,21 +166,59 @@ jobs:
           B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
           B2_APP_KEY: ${{ secrets.B2_APP_KEY }}
 
-      - name: Install/upgrade Velero via HelmChart (k3s Helm controller)
+      - name: Install/upgrade Velero via HelmChart
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
+          cd ~/apps/devops-qr
           kubectl apply -f infra/velero/helmchart.yaml
-          # wait for the velero deployment to be created, then ready
-          for i in $(seq 1 30); do
-            kubectl -n velero get deploy/velero >/dev/null 2>&1 && break
+
+          # Wait for controller
+          kubectl -n velero rollout status deploy/velero --timeout=180s || true
+          kubectl -n velero get pods -o wide
+
+          # Ensure BackupStorageLocation is available
+          for i in {1..30}; do
+            PHASE=$(kubectl -n velero get backupstoragelocation -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+            echo "BSL phase: ${PHASE:-<none>}"
+            [[ "$PHASE" == "Available" ]] && break
             sleep 2
           done
-          kubectl -n velero rollout status deploy/velero --timeout=180s || (kubectl -n velero get pods; exit 1)
+          kubectl -n velero get backupstoragelocation -o wide
 
-      - name: Apply Velero backup schedule
+      - name: Apply Velero schedules
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
+          cd ~/apps/devops-qr
           kubectl apply -f infra/velero/schedule-daily.yaml
+          kubectl -n velero get schedules
+          kubectl -n velero describe schedule | sed -n '1,120p'
+
+      - name: Create an on-demand Velero backup (smoke test)
+        shell: bash
+        run: |
+          set -euo pipefail
+          NOW=manual-$(date +%Y%m%d-%H%M)
+          kubectl -n velero create backup "$NOW" --ttl 336h
+          kubectl -n velero get backups
+
+      - name: Wait for backup to complete
+        shell: bash
+        run: |
+          set -euo pipefail
+          NAME=$(kubectl -n velero get backups -o jsonpath='{.items[-1].metadata.name}')
+          echo "Waiting on backup: $NAME"
+          for i in {1..60}; do
+            PHASE=$(kubectl -n velero get backup "$NAME" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+            echo "Phase: ${PHASE:-<none>}"
+            [[ "$PHASE" == "Completed" ]] && exit 0
+            [[ "$PHASE" == "PartiallyFailed" || "$PHASE" == "Failed" ]] && { kubectl -n velero describe backup "$NAME"; exit 1; }
+            sleep 2
+          done
+          echo "Backup did not complete in time"
+          kubectl -n velero describe backup "$NAME"
+          exit 1
       # -------- end Velero --------
 
       # -------- NEW: wait for cert-manager, apply infra, wait for MetalLB, verify Traefik LB IP --------
