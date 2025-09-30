@@ -32,5 +32,3 @@ spec:
             region: eu-central-003
             s3Url: https://s3.eu-central-003.backblazeb2.com
             s3ForcePathStyle: true
-      # (optional) if you add snapshots later:
-      # volumeSnapshotLocation: []
