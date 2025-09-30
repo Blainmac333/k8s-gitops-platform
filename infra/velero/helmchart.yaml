@@ -1,0 +1,31 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: velero
+  namespace: kube-system
+spec:
+  chart: velero
+  repo: https://vmware-tanzu.github.io/helm-charts
+  targetNamespace: velero
+  valuesContent: |
+    initContainers:
+      - name: velero-plugin-for-aws
+        image: velero/velero-plugin-for-aws:v1.9.0
+        volumeMounts:
+          - name: plugins
+            mountPath: /target
+
+    credentials:
+      useSecret: true
+      existingSecret: velero-credentials
+      existingSecretKey: cloud
+
+    configuration:
+      provider: aws
+      backupStorageLocation:
+        name: default
+        bucket: velero-blain-backups                  
+        config:
+          region: eu-central-003                        
+          s3Url: https://s3.eu-central-003.backblazeb2.com
+          s3ForcePathStyle: true

@@ -138,6 +138,46 @@ jobs:
       - name: Ensure Grafana admin password
         run: docker exec grafana grafana-cli admin reset-admin-password '${{ secrets.GRAFANA_ADMIN_PASSWORD }}' || true
 
+              # -------- Velero (Backblaze B2) --------
+      - name: Ensure Velero namespace + credentials Secret
+        run: |
+          set -e
+          kubectl apply -f infra/velero/namespace.yaml
+
+          # Create/patch secret with S3-compatible credentials in Velero's expected format
+          kubectl -n velero apply -f - <<'EOF'
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: velero-credentials
+          type: Opaque
+          stringData:
+            cloud: |
+              [default]
+              aws_access_key_id = ${B2_KEY_ID}
+              aws_secret_access_key = ${B2_APP_KEY}
+          EOF
+        env:
+          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          B2_APP_KEY: ${{ secrets.B2_APP_KEY }}
+
+      - name: Install/upgrade Velero via HelmChart (k3s Helm controller)
+        run: |
+          set -e
+          kubectl apply -f infra/velero/helmchart.yaml
+          # wait for the velero deployment to be created, then ready
+          for i in $(seq 1 30); do
+            kubectl -n velero get deploy/velero >/dev/null 2>&1 && break
+            sleep 2
+          done
+          kubectl -n velero rollout status deploy/velero --timeout=180s || (kubectl -n velero get pods; exit 1)
+
+      - name: Apply Velero backup schedule
+        run: |
+          set -e
+          kubectl apply -f infra/velero/schedule-daily.yaml
+      # -------- end Velero --------
+
       # -------- NEW: wait for cert-manager, apply infra, wait for MetalLB, verify Traefik LB IP --------
       - name: Wait for cert-manager to be Available
         run: |
