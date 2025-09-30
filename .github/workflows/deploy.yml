@@ -145,11 +145,9 @@ jobs:
           set -euo pipefail
           cd ~/apps/devops-qr
 
-          # Guard and idempotent apply
           kubectl get ns velero >/dev/null 2>&1 || kubectl create ns velero
           kubectl apply -f infra/velero/namespace.yaml
 
-          # Credentials (expand env vars in heredoc)
           kubectl -n velero apply -f - <<EOF
           apiVersion: v1
           kind: Secret
@@ -173,11 +171,9 @@ jobs:
           cd ~/apps/devops-qr
           kubectl apply -f infra/velero/helmchart.yaml
 
-          # Wait for controller
           kubectl -n velero rollout status deploy/velero --timeout=180s || true
           kubectl -n velero get pods -o wide
 
-          # Ensure BackupStorageLocation is available
           for i in {1..30}; do
             PHASE=$(kubectl -n velero get backupstoragelocation -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
             echo "BSL phase: ${PHASE:-<none>}"
@@ -200,20 +196,37 @@ jobs:
         run: |
           set -euo pipefail
           NOW=manual-$(date +%Y%m%d-%H%M)
-          kubectl -n velero create backup "$NOW" --ttl 336h
+          cat <<EOF | kubectl -n velero apply -f -
+          apiVersion: velero.io/v1
+          kind: Backup
+          metadata:
+            name: ${NOW}
+            labels:
+              smoke: "true"
+          spec:
+            includedNamespaces:
+            - "*"
+            ttl: 336h0m0s
+          EOF
           kubectl -n velero get backups
 
       - name: Wait for backup to complete
         shell: bash
         run: |
           set -euo pipefail
-          NAME=$(kubectl -n velero get backups -o jsonpath='{.items[-1].metadata.name}')
+          NAME=$(kubectl -n velero get backups -l smoke=true -o jsonpath='{.items[0].metadata.name}')
           echo "Waiting on backup: $NAME"
           for i in {1..60}; do
             PHASE=$(kubectl -n velero get backup "$NAME" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
             echo "Phase: ${PHASE:-<none>}"
-            [[ "$PHASE" == "Completed" ]] && exit 0
-            [[ "$PHASE" == "PartiallyFailed" || "$PHASE" == "Failed" ]] && { kubectl -n velero describe backup "$NAME"; exit 1; }
+            if [[ "$PHASE" == "Completed" ]]; then
+              kubectl -n velero describe backup "$NAME" | sed -n '1,160p'
+              exit 0
+            fi
+            if [[ "$PHASE" == "PartiallyFailed" || "$PHASE" == "Failed" ]]; then
+              kubectl -n velero describe backup "$NAME"
+              exit 1
+            fi
             sleep 2
           done
           echo "Backup did not complete in time"
@@ -233,12 +246,9 @@ jobs:
         run: |
           set -e
           cd ~/apps/devops-qr
-          # You can keep the explicit files OR use the recursive apply below.
           kubectl apply -f infra/metallb/lan-pool.yaml
           kubectl apply -f infra/traefik/helmchartconfig.yaml
           kubectl apply -f infra/cert-manager/clusterissuer-letsencrypt.yaml
-          # Recommended alternative for future additions:
-          # kubectl apply -R -f infra/
 
       - name: Wait for MetalLB to be Ready
         run: |
@@ -286,14 +296,12 @@ jobs:
         run: |
           set -e
           docker exec qr-proxy caddy reload --config /etc/caddy/Caddyfile
-          # give Caddy a moment to finish listeners / caches
           sleep 2
 
       - name: End-to-end QR API smoke test (Caddy -> Traefik -> k3s)
         shell: bash
         run: |
           set -euo pipefail
-
           retry() {
             local max="${1:-10}"; shift
             local n=0
@@ -306,10 +314,8 @@ jobs:
               sleep 2
             done
           }
-
           echo "1) Wait for health (Caddy -> NodePort -> Traefik -> backend)"
           retry 30 curl -sf -H 'Host: qr.blainweb.com' http://localhost/api/health
-
           echo "2) Generate QR with retries"
           JSON=""
           gen() {
@@ -322,10 +328,8 @@ jobs:
             [[ -n "${URL:-}" && "$URL" != "null" ]]
           }
           retry 10 gen
-
           URL=$(printf '%s' "$JSON" | sed -n 's/.*"qr_code_url":"\([^"]*\)".*/\1/p')
           echo "QR URL: $URL"
-
           echo "3) Fetch PNG with retries"
           fetch_ok() {
             CODE=$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: qr.blainweb.com' "$URL" || echo 000)
@@ -339,5 +343,4 @@ jobs:
             kubectl -n qr get pods -o wide || true
             exit 1
           fi
-
           echo "Smoke test passed ✅"
