@@ -165,7 +165,6 @@ jobs:
 
           # Quick sanity: both keys must be non-empty
           test -n "${B2_KEY_ID}" && test -n "${B2_APP_KEY}" || { echo "❌ Missing Backblaze secrets"; exit 1; }
-
         env:
           B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
           B2_APP_KEY: ${{ secrets.B2_APP_KEY }}
@@ -175,15 +174,12 @@ jobs:
         run: |
           set -euo pipefail
           cd ~/apps/devops-qr
-
           kubectl apply -f infra/velero/helmchart.yaml
 
-          # Wait for the velero Deployment to appear and roll out
+          # Wait up to ~2 minutes for the velero Deployment to show up
           echo "⏳ Waiting for velero Deployment to exist…"
           for i in {1..60}; do
-            if kubectl -n velero get deploy/velero >/dev/null 2>&1; then
-              break
-            fi
+            kubectl -n velero get deploy/velero >/dev/null 2>&1 && break || true
             sleep 2
           done
           if ! kubectl -n velero get deploy/velero >/dev/null 2>&1; then
@@ -199,12 +195,12 @@ jobs:
           echo "⏳ Waiting for velero rollout…"
           kubectl -n velero rollout status deploy/velero --timeout=180s
 
-          # Node agent is optional but you enabled it; do a soft check
+          # Node agent (optional) presence is informational
           kubectl -n velero get ds/node-agent -o wide || true
 
           # Require BackupStorageLocation to become Available
           echo "⏳ Waiting for BackupStorageLocation=Available…"
-          for i in {1..60}; do
+          for i in {1..90}; do
             PHASE=$(kubectl -n velero get backupstoragelocation default -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
             echo "BSL phase: ${PHASE:-<none>}"
             [[ "$PHASE" == "Available" ]] && break
@@ -237,10 +233,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Only run if BSL is still Available
+          # Only run if BSL is Available
           PHASE=$(kubectl -n velero get backupstoragelocation default -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
           if [[ "$PHASE" != "Available" ]]; then
-            echo "⚠️ Skipping smoke backup because BSL is not Available ($PHASE)"
+            echo "❌ Skipping smoke backup because BSL is not Available ($PHASE)"
             exit 1
           fi
 
@@ -265,7 +261,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          NAME=$(kubectl -n velero get backups -l smoke=true -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          NAME=$(kubectl -n velero get backups -l smoke=true --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null || echo "")
           if [[ -z "${NAME}" ]]; then
             echo "❌ No smoke backup found (previous step likely skipped/failed)."
             exit 1
