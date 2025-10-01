@@ -145,9 +145,11 @@ jobs:
           set -euo pipefail
           cd ~/apps/devops-qr
 
+          # Namespace (idempotent)
           kubectl get ns velero >/dev/null 2>&1 || kubectl create ns velero
           kubectl apply -f infra/velero/namespace.yaml
 
+          # Credentials Secret (from GitHub Actions secrets)
           kubectl -n velero apply -f - <<EOF
           apiVersion: v1
           kind: Secret
@@ -160,26 +162,66 @@ jobs:
               aws_access_key_id = ${B2_KEY_ID}
               aws_secret_access_key = ${B2_APP_KEY}
           EOF
+
+          # Quick sanity: both keys must be non-empty
+          test -n "${B2_KEY_ID}" && test -n "${B2_APP_KEY}" || { echo "❌ Missing Backblaze secrets"; exit 1; }
+
         env:
           B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
           B2_APP_KEY: ${{ secrets.B2_APP_KEY }}
 
-      - name: Install/upgrade Velero via HelmChart
+      - name: Install/upgrade Velero via HelmChart (fail-fast)
         shell: bash
         run: |
           set -euo pipefail
           cd ~/apps/devops-qr
+
           kubectl apply -f infra/velero/helmchart.yaml
 
-          kubectl -n velero rollout status deploy/velero --timeout=180s || true
-          kubectl -n velero get pods -o wide
+          # Wait for the velero Deployment to appear and roll out
+          echo "⏳ Waiting for velero Deployment to exist…"
+          for i in {1..60}; do
+            if kubectl -n velero get deploy/velero >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          if ! kubectl -n velero get deploy/velero >/dev/null 2>&1; then
+            echo "❌ velero Deployment not created. Dumping Helm install job logs:"
+            JOB=$(kubectl -n kube-system get job -l helmcharts.helm.cattle.io/chart=velero -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+            if [[ -n "${JOB:-}" ]]; then
+              POD=$(kubectl -n kube-system get pod -l job-name="${JOB}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+              kubectl -n kube-system logs "${POD}" -c helm --tail=200 || true
+            fi
+            exit 1
+          fi
 
-          for i in {1..30}; do
-            PHASE=$(kubectl -n velero get backupstoragelocation -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
+          echo "⏳ Waiting for velero rollout…"
+          kubectl -n velero rollout status deploy/velero --timeout=180s
+
+          # Node agent is optional but you enabled it; do a soft check
+          kubectl -n velero get ds/node-agent -o wide || true
+
+          # Require BackupStorageLocation to become Available
+          echo "⏳ Waiting for BackupStorageLocation=Available…"
+          for i in {1..60}; do
+            PHASE=$(kubectl -n velero get backupstoragelocation default -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
             echo "BSL phase: ${PHASE:-<none>}"
             [[ "$PHASE" == "Available" ]] && break
             sleep 2
           done
+
+          PHASE=$(kubectl -n velero get backupstoragelocation default -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+          if [[ "$PHASE" != "Available" ]]; then
+            echo "❌ BackupStorageLocation not Available. Details:"
+            kubectl -n velero get backupstoragelocation -o wide || true
+            kubectl -n velero describe backupstoragelocation default || true
+            echo "Secret present?"
+            kubectl -n velero get secret velero-credentials -o yaml || true
+            exit 1
+          fi
+
+          echo "✅ Velero installed and BSL is Available."
           kubectl -n velero get backupstoragelocation -o wide
 
       - name: Apply Velero schedules
@@ -195,6 +237,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Only run if BSL is still Available
+          PHASE=$(kubectl -n velero get backupstoragelocation default -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+          if [[ "$PHASE" != "Available" ]]; then
+            echo "⚠️ Skipping smoke backup because BSL is not Available ($PHASE)"
+            exit 1
+          fi
+
           NOW=manual-$(date +%Y%m%d-%H%M)
           cat <<EOF | kubectl -n velero apply -f -
           apiVersion: velero.io/v1
@@ -204,17 +253,23 @@ jobs:
             labels:
               smoke: "true"
           spec:
+            storageLocation: default
             includedNamespaces:
             - "*"
             ttl: 336h0m0s
           EOF
+
           kubectl -n velero get backups
 
       - name: Wait for backup to complete
         shell: bash
         run: |
           set -euo pipefail
-          NAME=$(kubectl -n velero get backups -l smoke=true -o jsonpath='{.items[0].metadata.name}')
+          NAME=$(kubectl -n velero get backups -l smoke=true -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          if [[ -z "${NAME}" ]]; then
+            echo "❌ No smoke backup found (previous step likely skipped/failed)."
+            exit 1
+          fi
           echo "Waiting on backup: $NAME"
           for i in {1..60}; do
             PHASE=$(kubectl -n velero get backup "$NAME" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
@@ -223,14 +278,14 @@ jobs:
               kubectl -n velero describe backup "$NAME" | sed -n '1,160p'
               exit 0
             fi
-            if [[ "$PHASE" == "PartiallyFailed" || "$PHASE" == "Failed" ]]; then
-              kubectl -n velero describe backup "$NAME"
+            if [[ "$PHASE" == "PartiallyFailed" || "$PHASE" == "Failed" || "$PHASE" == "FailedValidation" ]]; then
+              kubectl -n velero describe backup "$NAME" || true
               exit 1
             fi
             sleep 2
           done
           echo "Backup did not complete in time"
-          kubectl -n velero describe backup "$NAME"
+          kubectl -n velero describe backup "$NAME" || true
           exit 1
       # -------- end Velero --------
 
