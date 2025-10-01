@@ -27,7 +27,10 @@ spec:
         - name: default
           provider: aws
           bucket: velero-blain-backups
-          # prefix: optional/subfolder
+          accessMode: ReadWrite
+          credential:               
+            name: velero-credentials
+            key: cloud
           config:
             region: eu-central-003
             s3Url: https://s3.eu-central-003.backblazeb2.com
