@@ -1,0 +1,32 @@
+name: Velero cleanup (test backups)
+
+on:
+  workflow_dispatch:
+    inputs:
+      keep:
+        description: "How many most-recent test backups to keep"
+        required: false
+        default: "5"
+  schedule:
+    # Sundays 03:10 UTC
+    - cron: "10 3 * * 0"
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: [self-hosted, Linux, ARM64]
+    timeout-minutes: 20
+    steps:
+      - name: Sync repo on Pi
+        run: |
+          cd ~/apps/devops-qr
+          git fetch --all
+          git reset --hard origin/master
+
+      - name: Run cleanup
+        run: |
+          cd ~/apps/devops-qr
+          chmod +x scripts/velero-cleanup.sh
+          ./scripts/velero-cleanup.sh --keep "${{ github.event.inputs.keep || '5' }}"
