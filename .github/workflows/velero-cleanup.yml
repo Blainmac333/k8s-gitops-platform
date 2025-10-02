@@ -1,18 +1,18 @@
-name: Velero restore test
+# .github/workflows/velero-cleanup.yml
+name: Velero cleanup (test backups)
 
 on:
   workflow_dispatch: {}
   schedule:
-    # Mondays 02:30 UTC (adjust as you like)
-    - cron: "30 2 * * 1"
+    - cron: "10 3 * * 0"  # Sundays 03:10 UTC
 
 permissions:
   contents: read
 
 jobs:
-  test:
+  cleanup:
     runs-on: [self-hosted, Linux, ARM64]
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - name: Sync repo on Pi
         run: |
@@ -20,15 +20,14 @@ jobs:
           git fetch --all
           git reset --hard origin/master
 
-      - name: Run restore test
+      - name: Verify script exists
         run: |
           cd ~/apps/devops-qr
-          chmod +x scripts/velero-restore-test.sh
-          ./scripts/velero-restore-test.sh
+          echo "Listing repo root and scripts dir:"
+          pwd; ls -la; echo; ls -la scripts || true
+          test -f scripts/velero-cleanup.sh || { echo "scripts/velero-cleanup.sh is missing"; exit 1; }
 
-      # Optional: self-clean a bit after each run (keeps last 5)
-      - name: Prune old test backups (keep 5)
-        if: always()
+      - name: Run cleanup
         run: |
           cd ~/apps/devops-qr
           chmod +x scripts/velero-cleanup.sh
