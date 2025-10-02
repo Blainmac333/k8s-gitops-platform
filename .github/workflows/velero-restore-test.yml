@@ -1,15 +1,10 @@
+# .github/workflows/velero-cleanup.yml
 name: Velero cleanup (test backups)
 
 on:
-  workflow_dispatch:
-    inputs:
-      keep:
-        description: "How many most-recent test backups to keep"
-        required: false
-        default: "5"
+  workflow_dispatch: {}
   schedule:
-    # Sundays 03:10 UTC
-    - cron: "10 3 * * 0"
+    - cron: "10 3 * * 0"  # Sundays 03:10 UTC
 
 permissions:
   contents: read
@@ -25,8 +20,15 @@ jobs:
           git fetch --all
           git reset --hard origin/master
 
+      - name: Verify script exists
+        run: |
+          cd ~/apps/devops-qr
+          echo "Listing repo root and scripts dir:"
+          pwd; ls -la; echo; ls -la scripts || true
+          test -f scripts/velero-cleanup.sh || { echo "scripts/velero-cleanup.sh is missing"; exit 1; }
+
       - name: Run cleanup
         run: |
           cd ~/apps/devops-qr
           chmod +x scripts/velero-cleanup.sh
-          ./scripts/velero-cleanup.sh --keep "${{ github.event.inputs.keep || '5' }}"
+          ./scripts/velero-cleanup.sh --keep 5
