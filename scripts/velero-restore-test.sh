@@ -5,13 +5,17 @@ set -euo pipefail
 NS="velero-restore-test-$(date +%Y%m%d-%H%M)"
 B="test-backup-$(date +%H%M%S)"
 R="test-restore-$(date +%H%M%S)"
-LABEL="app=velero-restore-test"
+
+# Label (as key/value for Kubernetes) and selector form for kubectl -l
+LABEL_KEY="app"
+LABEL_VAL="velero-restore-test"
+LABEL_SELECTOR="${LABEL_KEY}=${LABEL_VAL}"
 
 echo "== Velero restore test =="
 echo "Namespace : $NS"
 echo "Backup    : $B"
 echo "Restore   : $R"
-echo "Label     : $LABEL"
+echo "Label     : $LABEL_SELECTOR"
 echo
 
 # 1) Create a test namespace and a simple object to verify later
@@ -27,7 +31,7 @@ kind: Backup
 metadata:
   name: ${B}
   labels:
-    ${LABEL}: "true"
+    ${LABEL_KEY}: ${LABEL_VAL}
 spec:
   storageLocation: default
   includedNamespaces:
@@ -56,7 +60,7 @@ kind: Restore
 metadata:
   name: ${R}
   labels:
-    ${LABEL}: "true"
+    ${LABEL_KEY}: ${LABEL_VAL}
 spec:
   backupName: ${B}
 EOF
