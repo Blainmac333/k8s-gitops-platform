@@ -1,92 +1,81 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-KEEP=5
-NS=velero
-LABEL='app=velero-restore-test'
+# Unique test namespace + names
+NS="velero-restore-test-$(date +%Y%m%d-%H%M)"
+B="test-backup-$(date +%H%M%S)"
+R="test-restore-$(date +%H%M%S)"
+LABEL="app=velero-restore-test"
 
-usage() {
-  echo "Usage: $0 [--keep N]" >&2
-}
+echo "== Velero restore test =="
+echo "Namespace : $NS"
+echo "Backup    : $B"
+echo "Restore   : $R"
+echo "Label     : $LABEL"
+echo
 
-# -------- args --------
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --keep)
-      KEEP="${2:-}"; shift 2;;
-    -h|--help)
-      usage; exit 0;;
-    *)
-      echo "Unknown arg: $1" >&2; usage; exit 1;;
-  esac
+# 1) Create a test namespace and a simple object to verify later
+echo "--> Create test namespace + object"
+kubectl create ns "$NS"
+kubectl -n "$NS" create configmap demo --from-literal=foo=bar
+
+# 2) Take a Velero backup (label it so cleanup can find it)
+echo "--> Create backup"
+cat <<EOF | kubectl -n velero apply -f -
+apiVersion: velero.io/v1
+kind: Backup
+metadata:
+  name: ${B}
+  labels:
+    ${LABEL}: "true"
+spec:
+  storageLocation: default
+  includedNamespaces:
+  - "${NS}"
+  ttl: 24h
+EOF
+
+# Wait for backup to complete (or fail fast)
+for i in {1..60}; do
+  p=$(kubectl -n velero get backup "$B" -o jsonpath='{.status.phase}' 2>/dev/null || echo "?")
+  echo "Backup phase: $p"
+  [[ "$p" == "Completed" ]] && break
+  [[ "$p" =~ Failed|PartiallyFailed|FailedValidation ]] && { kubectl -n velero describe backup "$B"; exit 1; }
+  sleep 2
 done
 
-if ! [[ "$KEEP" =~ ^[0-9]+$ ]]; then
-  echo "❌ --keep must be an integer (got: '$KEEP')" >&2
+# 3) Simulate loss: remove the namespace
+echo "--> Simulate loss (delete ns)"
+kubectl delete ns "$NS" --wait=true
+
+# 4) Restore the backup (label the restore too)
+echo "--> Restore"
+cat <<EOF | kubectl -n velero apply -f -
+apiVersion: velero.io/v1
+kind: Restore
+metadata:
+  name: ${R}
+  labels:
+    ${LABEL}: "true"
+spec:
+  backupName: ${B}
+EOF
+
+# Wait for restore to complete (or fail fast)
+for i in {1..60}; do
+  rp=$(kubectl -n velero get restore "$R" -o jsonpath='{.status.phase}' 2>/dev/null || echo "?")
+  echo "Restore phase: $rp"
+  [[ "$rp" == "Completed" ]] && break
+  [[ "$rp" =~ Failed|PartiallyFailed ]] && { kubectl -n velero describe restore "$R"; exit 1; }
+  sleep 2
+done
+
+# 5) Verify the restored object
+echo "--> Verify"
+VAL=$(kubectl -n "$NS" get cm demo -o jsonpath='{.data.foo}' 2>/dev/null || echo "")
+if [[ "$VAL" == "bar" ]]; then
+  echo "Restore test OK ✅"
+else
+  echo "Restore test FAILED (expected foo=bar, got: '$VAL')" >&2
   exit 1
 fi
-
-echo "== Velero cleanup =="
-echo "Namespace          : $NS"
-echo "Label selector     : $LABEL"
-echo "Keep most recent   : $KEEP"
-
-echo
-echo "--> Collecting test backups…"
-# Output as: name|timestamp (RFC3339)
-mapfile -t PAIRS < <(
-  kubectl -n "$NS" get backup -l "$LABEL" \
-    -o jsonpath='{range .items[*]}{.metadata.name}{"|"}{.metadata.creationTimestamp}{"\n"}{end}' \
-  | sed '/^$/d' || true
-)
-
-TOTAL=${#PAIRS[@]}
-if (( TOTAL == 0 )); then
-  echo "No test backups found — nothing to do."
-  exit 0
-fi
-
-# Sort by timestamp ascending (oldest first)
-IFS=$'\n' read -r -d '' -a SORTED < <(printf '%s\n' "${PAIRS[@]}" | sort -t'|' -k2,2 && printf '\0')
-
-echo "Found $TOTAL test backups."
-if (( TOTAL <= KEEP )); then
-  echo "Nothing to delete (<= $KEEP present)."
-else
-  DEL=$(( TOTAL - KEEP ))
-  echo
-  echo "--> Deleting $DEL backups older than the most-recent $KEEP:"
-  printf '%s\n' "${SORTED[@]}" | head -n "$DEL" | while IFS='|' read -r NAME TS; do
-    echo "Deleting backup: $NAME (created $TS)"
-    # Deleting the Backup CR triggers object cleanup in the BSL
-    kubectl -n "$NS" delete backup "$NAME" --wait=false || true
-  done
-fi
-
-echo
-echo "--> Tidying old test restores (older than 7 days)…"
-mapfile -t RPAIRS < <(
-  kubectl -n "$NS" get restore -l "$LABEL" \
-    -o jsonpath='{range .items[*]}{.metadata.name}{"|"}{.metadata.creationTimestamp}{"\n"}{end}' \
-  | sed '/^$/d' || true
-)
-
-if (( ${#RPAIRS[@]} > 0 )); then
-  NOW_S=$(date -u +%s)
-  for LINE in "${RPAIRS[@]}"; do
-    NAME="${LINE%%|*}"
-    TS="${LINE##*|}"
-    # Convert RFC3339 -> epoch (GNU date first, BSD/macOS fallback next)
-    TS_S=$(date -u -d "$TS" +%s 2>/dev/null || date -u -jf "%Y-%m-%dT%H:%M:%SZ" "$TS" +%s)
-    AGE_D=$(( (NOW_S - TS_S) / 86400 ))
-    if (( AGE_D >= 7 )); then
-      echo "Deleting restore: $NAME (age ${AGE_D}d)"
-      kubectl -n "$NS" delete restore "$NAME" --wait=false || true
-    fi
-  done
-else
-  echo "No test restores found."
-fi
-
-echo
-echo "Cleanup complete ✅"
