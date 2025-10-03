@@ -18,6 +18,19 @@ echo "Restore   : $R"
 echo "Label     : $LABEL_SELECTOR"
 echo
 
+# --- Preflight: ensure BSL usable; skip if Backblaze caps are exceeded ---
+BSL_PHASE=$(kubectl -n velero get backupstoragelocation default -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+BSL_MSG=$(kubectl -n velero get backupstoragelocation default -o jsonpath='{.status.message}' 2>/dev/null || echo "")
+if [[ "$BSL_PHASE" != "Available" ]]; then
+  if [[ "$BSL_MSG" == *"Transaction cap exceeded"* ]]; then
+    echo "⚠️  Skipping restore test: Backblaze B2 transaction cap exceeded."
+    exit 0
+  fi
+  echo "❌ BSL not Available ($BSL_PHASE). Details:"
+  kubectl -n velero describe backupstoragelocation default || true
+  exit 1
+fi
+
 # 1) Create a test namespace and a simple object to verify later
 echo "--> Create test namespace + object"
 kubectl create ns "$NS"
