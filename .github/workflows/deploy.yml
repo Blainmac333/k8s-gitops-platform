@@ -169,14 +169,14 @@ jobs:
           B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
           B2_APP_KEY: ${{ secrets.B2_APP_KEY }}
 
-      - name: Install/upgrade Velero via HelmChart (fail-fast)
+      - name: Install/upgrade Velero via HelmChart (fail-soft on B2 caps)
         shell: bash
         run: |
           set -euo pipefail
           cd ~/apps/devops-qr
           kubectl apply -f infra/velero/helmchart.yaml
 
-          # Wait up to ~2 minutes for the velero Deployment to show up
+          # Wait for the velero Deployment to appear
           echo "⏳ Waiting for velero Deployment to exist…"
           for i in {1..60}; do
             kubectl -n velero get deploy/velero >/dev/null 2>&1 && break || true
@@ -195,15 +195,21 @@ jobs:
           echo "⏳ Waiting for velero rollout…"
           kubectl -n velero rollout status deploy/velero --timeout=180s
 
-          # Node agent (optional) presence is informational
+          # Node agent info
           kubectl -n velero get ds/node-agent -o wide || true
 
-          # Require BackupStorageLocation to become Available
+          # Wait for BSL to become Available. If Backblaze caps are hit, pass the step and mark SKIP.
           echo "⏳ Waiting for BackupStorageLocation=Available…"
           for i in {1..90}; do
             PHASE=$(kubectl -n velero get backupstoragelocation default -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-            echo "BSL phase: ${PHASE:-<none>}"
+            MSG=$(kubectl -n velero get backupstoragelocation default -o jsonpath='{.status.message}' 2>/dev/null || echo "")
+            echo "BSL phase: ${PHASE:-<none>} ${MSG:+| $MSG}"
             [[ "$PHASE" == "Available" ]] && break
+            if [[ "$MSG" == *"Transaction cap exceeded"* ]]; then
+              echo "⚠️  Backblaze B2 transaction cap exceeded; continuing deploy and skipping smoke test."
+              echo "SKIP_VELERO_SMOKE=1" >> "$GITHUB_ENV"
+              exit 0
+            fi
             sleep 2
           done
 
@@ -230,10 +236,10 @@ jobs:
           kubectl -n velero describe schedule | sed -n '1,120p'
 
       - name: Create an on-demand Velero backup (smoke test)
+        if: env.SKIP_VELERO_SMOKE != '1'
         shell: bash
         run: |
           set -euo pipefail
-          # Only run if BSL is Available
           PHASE=$(kubectl -n velero get backupstoragelocation default -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
           if [[ "$PHASE" != "Available" ]]; then
             echo "❌ Skipping smoke backup because BSL is not Available ($PHASE)"
@@ -258,6 +264,7 @@ jobs:
           kubectl -n velero get backups
 
       - name: Wait for backup to complete
+        if: env.SKIP_VELERO_SMOKE != '1'
         shell: bash
         run: |
           set -euo pipefail

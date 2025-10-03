@@ -28,9 +28,10 @@ spec:
           provider: aws
           bucket: velero-blain-backups
           accessMode: ReadWrite
-          credential:               
+          credential:
             name: velero-credentials
             key: cloud
+          validationFrequency: 1h   # <— NEW: validate less often to avoid B2 caps
           config:
             region: eu-central-003
             s3Url: https://s3.eu-central-003.backblazeb2.com
