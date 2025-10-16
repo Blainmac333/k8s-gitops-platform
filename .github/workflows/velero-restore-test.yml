@@ -3,7 +3,7 @@ name: Velero restore test
 on:
   workflow_dispatch: {}
   schedule:
-    # Mondays 02:30 UTC (adjust as you like)
+    # Mondays 02:30 UTC
     - cron: "30 2 * * 1"
 
 permissions:
@@ -13,12 +13,26 @@ jobs:
   test:
     runs-on: [self-hosted, Linux, ARM64]
     timeout-minutes: 30
+    env:
+      KUBECONFIG: /home/blain/.kube/config
     steps:
       - name: Sync repo on Pi
         run: |
           cd ~/apps/devops-qr
           git fetch --all
           git reset --hard origin/master
+
+      - name: Ensure kubeconfig for runner
+        run: |
+          set -euo pipefail
+          mkdir -p /home/blain/.kube
+          # copy from k3s root kubeconfig; adjust path if your k3s differs
+          sudo cp /etc/rancher/k3s/k3s.yaml /home/blain/.kube/config
+          sudo chown blain:blain /home/blain/.kube/config
+          chmod 600 /home/blain/.kube/config
+          # quick sanity
+          kubectl version --short
+          kubectl get nodes -o wide
 
       - name: Run restore test
         run: |
