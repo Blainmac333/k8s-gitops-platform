@@ -60,7 +60,22 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: [self-hosted, Linux, ARM64]
+    env:
+      # Make kubectl use the user copy by default
+      KUBECONFIG: /home/blain/.kube/config
     steps:
+      - name: Ensure kubeconfig for runner
+        run: |
+          set -euo pipefail
+          mkdir -p /home/blain/.kube
+          # copy the root-owned k3s kubeconfig to the runner user's home
+          sudo cp /etc/rancher/k3s/k3s.yaml /home/blain/.kube/config
+          sudo chown blain:blain /home/blain/.kube/config
+          chmod 600 /home/blain/.kube/config
+          # quick sanity check
+          kubectl version --short
+          kubectl get nodes -o wide
+
       - name: Sync repo files on Pi
         run: |
           set -e
