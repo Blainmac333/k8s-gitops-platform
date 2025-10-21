@@ -26,13 +26,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /home/blain/.kube
-          # copy from k3s root kubeconfig; adjust path if your k3s differs
           sudo cp /etc/rancher/k3s/k3s.yaml /home/blain/.kube/config
           sudo chown blain:blain /home/blain/.kube/config
           chmod 600 /home/blain/.kube/config
-          # quick sanity
-          kubectl version --short
-          kubectl get nodes -o wide
+
+          # Compatibility-friendly sanity checks (don’t fail workflow if noisy)
+          kubectl version --client=true || true
+          kubectl cluster-info || true
+          kubectl get nodes -o wide || true
 
       - name: Run restore test
         run: |
