@@ -355,18 +355,20 @@ jobs:
       # -------- END NEW --------
    
       - name: Ensure GHCR pull secret (qr namespace)
-        if: ${{ secrets.GHCR_READ_TOKEN != '' }}
         shell: bash
         env:
           GHCR_USER: ${{ github.repository_owner }}
           GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
         run: |
           set -euo pipefail
+          if [ -z "${GHCR_READ_TOKEN:-}" ]; then
+            echo "GHCR_READ_TOKEN not set; skipping pull-secret setup."
+            exit 0
+          fi
+
           NS=qr
-          # Make sure namespace exists
           kubectl get ns "$NS" >/dev/null 2>&1 || kubectl create ns "$NS"
 
-          # Create/update the docker-registry secret from Actions secrets (idempotent)
           kubectl -n "$NS" create secret docker-registry ghcr-creds \
             --docker-server=ghcr.io \
             --docker-username="${GHCR_USER}" \
@@ -374,7 +376,6 @@ jobs:
             --docker-email=none@example.com \
             --dry-run=client -o yaml | kubectl apply -f -
 
-          # Ensure default SA uses it so all Pods can pull
           kubectl -n "$NS" patch serviceaccount default \
             --type merge \
             -p '{"imagePullSecrets":[{"name":"ghcr-creds"}]}' >/dev/null || true
