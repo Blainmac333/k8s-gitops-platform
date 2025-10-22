@@ -353,6 +353,34 @@ jobs:
           kubectl -n metallb-system logs -l app=metallb,speaker --tail=100 || true
           exit 1
       # -------- END NEW --------
+   
+      - name: Ensure GHCR pull secret (qr namespace)
+        shell: bash
+        env:
+          GHCR_USER: ${{ github.repository_owner }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GHCR_READ_TOKEN:-}" ]; then
+            echo "GHCR_READ_TOKEN not set; skipping pull-secret setup."
+            exit 0
+          fi
+
+          NS=qr
+          kubectl get ns "$NS" >/dev/null 2>&1 || kubectl create ns "$NS"
+
+          kubectl -n "$NS" create secret docker-registry ghcr-creds \
+            --docker-server=ghcr.io \
+            --docker-username="${GHCR_USER}" \
+            --docker-password="${GHCR_READ_TOKEN}" \
+            --docker-email=none@example.com \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl -n "$NS" patch serviceaccount default \
+            --type merge \
+            -p '{"imagePullSecrets":[{"name":"ghcr-creds"}]}' >/dev/null || true
+
+          echo "✅ Ensured ghcr-creds in namespace '$NS'"
 
       # ---------- k3s: apply manifests & pin images to this commit ----------
       - name: Apply k8s manifests
