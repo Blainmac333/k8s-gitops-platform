@@ -99,12 +99,41 @@ jobs:
           kubectl apply -f infra/argocd/helmchart.yaml
 
       - name: Wait for Argo CD core to be Ready
+        shell: bash
         run: |
-          set -e
-          # wait for the main server and repo-server
-          kubectl -n argocd rollout status deploy/argocd-server --timeout=300s
-          kubectl -n argocd rollout status deploy/argocd-repo-server --timeout=300s
-          kubectl -n argocd get pods -o wide
+          set -euo pipefail
+
+          NS=argocd
+
+          echo "⏳ Waiting for Argo CD deployments to appear…"
+          # Wait up to ~5 minutes for the Helm controller to create resources
+          for i in {1..60}; do
+            CNT=$(kubectl -n "$NS" get deploy \
+              -l app.kubernetes.io/part-of=argocd \
+              --no-headers 2>/dev/null | wc -l | xargs)
+            if [[ "$CNT" -ge 2 ]]; then
+              echo "Found $CNT Argo CD deployments."
+              break
+            fi
+            sleep 5
+          done
+
+          if [[ "${CNT:-0}" -lt 2 ]]; then
+            echo "❌ Argo CD deployments did not appear in time."
+            kubectl -n "$NS" get all || true
+            kubectl -n kube-system get pods -l app=helm,name=argo-cd -A || true
+            exit 1
+          fi
+
+          echo "⏳ Waiting for server & repo-server rollouts…"
+          kubectl -n "$NS" rollout status deploy -l app.kubernetes.io/name=argocd-server --timeout=300s
+          kubectl -n "$NS" rollout status deploy -l app.kubernetes.io/name=argocd-repo-server --timeout=300s
+
+          echo "⏳ Waiting for application-controller (StatefulSet)…"
+          kubectl -n "$NS" rollout status statefulset -l app.kubernetes.io/name=argocd-application-controller --timeout=300s
+
+          echo "✅ Argo CD core is Ready."
+
 
       - name: Expose Argo CD via Ingress (already part of Helm values)
         run: |
