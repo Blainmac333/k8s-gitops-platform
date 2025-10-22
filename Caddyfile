@@ -35,3 +35,9 @@ http://cv.blainweb.com {
 http://grafana.blainweb.com {
   reverse_proxy grafana:3000
 }
+
+# Argo CD UI via Traefik Ingress
+argocd.blainweb.com {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:80
+}
