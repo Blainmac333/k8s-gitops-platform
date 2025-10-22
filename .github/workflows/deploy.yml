@@ -90,6 +90,50 @@ jobs:
             echo "WARNING: ~/apps/devops-qr is not a git repo. Skipping sync."
           fi
 
+            # --- Argo CD: install via HelmChart and expose via Traefik ---
+      - name: Apply Argo CD namespace + HelmChart
+        run: |
+          set -e
+          cd ~/apps/devops-qr
+          kubectl apply -f infra/argocd/namespace.yaml
+          kubectl apply -f infra/argocd/helmchart.yaml
+
+      - name: Wait for Argo CD core to be Ready
+        run: |
+          set -e
+          # wait for the main server and repo-server
+          kubectl -n argocd rollout status deploy/argocd-server --timeout=300s
+          kubectl -n argocd rollout status deploy/argocd-repo-server --timeout=300s
+          kubectl -n argocd get pods -o wide
+
+      - name: Expose Argo CD via Ingress (already part of Helm values)
+        run: |
+          set -e
+          kubectl -n argocd get ingress
+
+      - name: Create/Update Argo CD Application for qr
+        run: |
+          set -e
+          cd ~/apps/devops-qr
+          kubectl apply -f infra/argocd/app-qr.yaml
+
+      - name: Wait for qr-app to sync & become Healthy
+        run: |
+          set -e
+          # wait up to ~5 minutes for first sync
+          for i in $(seq 1 60); do
+            SYNC=$(kubectl -n argocd get application qr-app -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "")
+            HEALTH=$(kubectl -n argocd get application qr-app -o jsonpath='{.status.health.status}' 2>/dev/null || echo "")
+            echo "qr-app -> sync=${SYNC:-?} health=${HEALTH:-?}"
+            if [ "$SYNC" = "Synced" ] && [ "$HEALTH" = "Healthy" ]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Argo CD app didn't reach Healthy+Synced in time"
+          kubectl -n argocd get application qr-app -o yaml | sed -n '1,200p' || true
+          exit 1
+
       # --- keep provisioning dirs clean on every deploy ---
       - name: Remove untracked provisioning files
         run: |
