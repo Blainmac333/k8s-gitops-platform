@@ -1,0 +1,47 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: argo-cd
+  namespace: kube-system
+spec:
+  repo: https://argoproj.github.io/argo-helm
+  chart: argo-cd
+  version: 7.7.10          # current stable as of 2025-10; adjust over time
+  targetNamespace: argocd
+  valuesContent: |
+    global:
+      domain: argocd.blainweb.com
+
+    controller:
+      replicas: 1
+
+    server:
+      # ClusterIP; Traefik Ingress will front it
+      service:
+        type: ClusterIP
+      ingress:
+        enabled: true
+        ingressClassName: traefik
+        hosts:
+          - argocd.blainweb.com
+        tls:
+          - secretName: argocd-tls
+            hosts:
+              - argocd.blainweb.com
+        annotations:
+          kubernetes.io/tls-acme: "true"
+          cert-manager.io/cluster-issuer: "letsencrypt"   # <- change if your ClusterIssuer has a different name
+      # Optional: let ArgoCD serve HTTPS directly behind Traefik
+      extraArgs:
+        - --insecure
+
+    configs:
+      params:
+        server.insecure: "true"
+      cm:
+        # show app health/sync status nicely
+        ui.bannercontent: "Argo CD @ blainweb.com"
+      rbac:
+        policy.csv: |
+          p, role:admin, applications, *, */*, allow
+        policy.default: role:readonly
