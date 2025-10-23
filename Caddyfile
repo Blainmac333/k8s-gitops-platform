@@ -36,8 +36,19 @@ http://grafana.blainweb.com {
   reverse_proxy grafana:3000
 }
 
-# Argo CD UI via Traefik Ingress
-argocd.blainweb.com {
-    encode zstd gzip
-    reverse_proxy 127.0.0.1:80
+# Argo CD UI via Traefik Ingress (HTTP origin; Traefik handles TLS)
+http://argocd.blainweb.com {
+  # Let’s Encrypt HTTP-01 challenge must reach Traefik (MetalLB IP)
+  handle /.well-known/acme-challenge/* {
+    reverse_proxy 192.168.1.220:80 {
+      header_up Host {host}
+    }
+  }
+
+  # Everything else proxy to Traefik
+  handle {
+    reverse_proxy 127.0.0.1:80 {
+      header_up Host {host}
+    }
+  }
 }
