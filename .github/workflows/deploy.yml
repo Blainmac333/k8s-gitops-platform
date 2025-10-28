@@ -60,6 +60,9 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: [self-hosted, Linux, ARM64]
+    permissions:
+      contents: write  
+      packages: write
     env:
       # Make kubectl use the user copy by default
       KUBECONFIG: /home/blain/.kube/config
@@ -81,6 +84,8 @@ jobs:
       
       - name: Update k8s image tags to this commit and push (GitOps)
         if: github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           SHA="${GITHUB_SHA}"
@@ -88,9 +93,7 @@ jobs:
           B=./k8s/qr-backend.yaml
           F=./k8s/qr-frontend.yaml
 
-          # replace qr-backend tag (handles :latest or any previous sha-like tag)
           sed -i -E "s@(ghcr\.io/.*/qr-backend:)([A-Za-z0-9._-]+|latest)@\\1${SHA}@g" "$B"
-          # replace qr-frontend tag
           sed -i -E "s@(ghcr\.io/.*/qr-frontend:)([A-Za-z0-9._-]+|latest)@\\1${SHA}@g" "$F"
 
           git config --global user.email "ci@users.noreply.github.com"
@@ -98,7 +101,8 @@ jobs:
           git add "$B" "$F"
           if ! git diff --cached --quiet; then
             git commit -m "GitOps: pin images to ${SHA}"
-            git push origin master
+            # Push using explicit auth so it works on self-hosted
+            git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:master
           else
             echo "No image tag changes to commit."
           fi
