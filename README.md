@@ -1,127 +1,171 @@
-# 🧠 DevOps QR Code Project
+🧠 DevOps QR Code Project
 
-This project is a **self-hosted DevOps environment** running entirely on a **Raspberry Pi cluster**.  
-It demonstrates full lifecycle automation — from code to deployment, monitoring, and disaster recovery — all managed via **GitHub Actions**, **Docker**, and **Kubernetes**.
+This project is a fully self-hosted DevOps environment running entirely on a Raspberry Pi cluster.
+It demonstrates end-to-end automation — from code commit to build, deployment, monitoring, and disaster recovery — all managed through GitHub Actions, Argo CD, Docker, and Kubernetes (k3s).
 
----
+🌐 Hosted Services
 
-## 🌐 Hosted Services
+All services are hosted under the *.blainweb.com domain and deployed to a self-managed Kubernetes cluster running on a Raspberry Pi.
 
-All services run under my personal domain **[qr.blainweb.com](https://qr.blainweb.com)** and are deployed to my self-managed Kubernetes cluster on the Raspberry Pi.
+Service	Description	Stack
+QR Code App	Users submit URLs to generate QR codes stored in S3-compatible cloud storage.	Frontend: Next.js / Backend: FastAPI
+CV / Portfolio Website	Personal website showcasing projects and experience.	React / Static Hosting
+Grafana Dashboards	Cluster and workload observability with real-time metrics.	Grafana + Prometheus
+Velero Backups	Automated cluster backups and recovery tests.	Velero + Backblaze B2
+Argo CD	GitOps-based continuous delivery system that monitors GitHub and syncs changes to Kubernetes.	Argo CD + Helm
+⚙️ Application Overview
+🖥️ Frontend (Next.js)
 
-| Service | Description | Stack |
-|----------|--------------|--------|
-| **QR Code App** | Users can submit URLs to generate QR codes, which are stored in cloud object storage. | Frontend: Next.js / Backend: FastAPI |
-| **CV / Portfolio Website** | Personal website showcasing my work, projects, and professional background. | React / Static Hosting |
-| **Grafana Dashboards** | Observability and monitoring for the cluster, workloads, and backups. | Grafana + Prometheus stack |
-| **Velero Backups** | Automated cluster and volume backups with disaster recovery validation. | Velero + Backblaze B2 |
+Built with Next.js and TypeScript.
 
----
+Provides a sleek interface for generating and retrieving QR codes.
 
-## ⚙️ Application Overview
+Runs on port 3000, served through Kubernetes and reverse-proxied by Caddy → Traefik → k3s.
 
-### 🖥️ Frontend (Next.js)
-- Built using **Next.js** and **TypeScript**.
-- Provides a clean interface to submit URLs and display generated QR codes.
-- Runs on **Port 3000** in Docker, reverse-proxied via NGINX on the Raspberry Pi.
+🧩 Backend (FastAPI)
 
-### 🧩 Backend (FastAPI)
-- Developed with **Python** and **FastAPI**.
-- Accepts URLs from the frontend and generates corresponding **QR codes**.
-- Stores QR code images in **Backblaze B2** (S3-compatible storage).
-- Runs on **Port 8000** and communicates internally via Kubernetes services.
+Built using Python and FastAPI.
 
----
+Handles incoming URLs and generates QR codes.
 
-## 🐳 Containerization
+Stores generated images in Backblaze B2 (S3-compatible).
 
-Both the frontend and backend are fully **Dockerized** with independent `Dockerfile`s.
+Runs on port 8000, accessible via internal Kubernetes services.
 
-- Containers are built and versioned via **GitHub Actions**.
-- Each service has its own image to allow independent scaling and redeployment.
-- Docker images are deployed to the Raspberry Pi’s Kubernetes cluster using manifests and Helm charts.
-- Configuration and environment secrets are injected securely at runtime.
+🐳 Containerization & Deployment
 
----
+Both frontend and backend have independent Dockerfiles.
 
-## 🔐 Secrets Management
+Images are built via GitHub Actions on every push to master.
 
-All sensitive credentials are stored securely in **GitHub Actions Secrets**, including:
+Versioned container images are pushed to GitHub Container Registry (GHCR).
 
-| Secret | Description |
-|---------|-------------|
-| `B2_KEY_ID` | Backblaze B2 Key ID |
-| `B2_APP_KEY` | Backblaze B2 Application Key |
-| `S3_BUCKET_NAME` | Name of the B2 S3-compatible bucket |
-| `API_KEY` | Internal API key for the FastAPI backend |
-| `KUBE_CONFIG` | Encoded kubeconfig for Raspberry Pi cluster access |
+Deployments are defined as Kubernetes manifests managed by Argo CD.
 
-These secrets are injected during CI/CD workflows to:
-- Authenticate with Backblaze for backup and QR code uploads.
-- Deploy to the Pi’s Kubernetes cluster via `kubectl`.
-- Configure environment variables in containers securely without exposing credentials in code.
+Each deployment uses revisionHistoryLimit: 2 to retain only the last two versions for clean rollbacks.
 
----
+🔐 Secrets Management
 
-## 🔁 CI/CD Pipeline (GitHub Actions)
+All sensitive values are stored in GitHub Actions Secrets.
 
-All automation runs via **GitHub Actions**, using a **self-hosted ARM64 runner** located on the Raspberry Pi.
+Secret	Description
+B2_KEY_ID	Backblaze B2 Key ID
+B2_APP_KEY	Backblaze B2 Application Key
+S3_BUCKET_NAME	Name of S3-compatible bucket
+API_KEY	Internal API key for FastAPI
+KUBE_CONFIG	Encoded kubeconfig for the Pi cluster
+AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY	For AWS S3-compatible services (optional future use)
 
-### Workflow Overview
-| Workflow | Description |
-|-----------|--------------|
-| **Build & Test** | Runs linting, builds Docker images, and ensures API/frontend integrity. |
-| **Deploy** | Pulls from GitHub, rebuilds containers, applies Kubernetes manifests, and restarts services. |
-| **Velero Restore Test** | Automatically tests that Velero can back up and restore Kubernetes namespaces successfully. |
-| **Velero Cleanup** | Cleans up old Velero test backups and restores weekly to manage storage space. |
+Secrets are securely injected during CI/CD to:
 
-### Key Features
-- **Automated Deployments:** Pushing to `master` triggers a full rebuild and redeploy.
-- **Fail-Soft Logic:** If Backblaze API rate limits or caps are hit, the pipeline continues gracefully.
-- **Rolling Updates:** Uses Kubernetes rollout for zero-downtime deployments.
-- **Infrastructure as Code:** Helm charts and manifests define all deployments, services, and secrets.
+Authenticate with Backblaze B2.
 
----
+Deploy applications via the Pi’s cluster.
 
-## ☁️ Backups & Disaster Recovery (Velero + Backblaze B2)
+Configure runtime environment variables without exposing credentials in Git.
 
-Velero is installed via Helm and configured to back up Kubernetes resources and persistent volumes to **Backblaze B2**, an S3-compatible storage provider.
+🔁 CI/CD Pipeline (GitHub Actions)
 
-### Backup Details
-- **Provider:** `aws` (S3-compatible)
-- **Bucket:** `velero-blain-backups`
-- **Endpoint:** `https://s3.eu-central-003.backblazeb2.com`
-- **Schedule:** Daily automated backups at 03:00 UTC
-- **Retention:** Keeps 5 most recent test backups
-- **Fail-Soft:** If B2 transaction caps are hit, deploy continues and marks the backup stage as skipped
+The Raspberry Pi runs a self-hosted ARM64 GitHub Actions runner full-time, enabling a fully autonomous CI/CD workflow.
 
-### Validation & Cleanup
-- `scripts/velero-restore-test.sh` automatically tests a full backup/restore workflow.
-- `scripts/velero-cleanup.sh` deletes old test backups and restores weekly to conserve space.
+Pipeline Overview
+Workflow	Description
+Build & Push	Builds Docker images for backend and frontend, tags them with the Git commit SHA, and pushes to GHCR.
+Deploy (GitOps)	Updates Kubernetes manifests with the new image tags, commits back to master, and Argo CD automatically syncs the cluster.
+Velero Restore Test	Verifies cluster backup/restore integrity using Velero.
+Velero Cleanup	Deletes old backups/restores weekly to manage B2 storage efficiently.
+Key Features
 
----
+✅ Full GitOps Deployment Flow — Argo CD automatically syncs and heals the cluster whenever manifests in Git change.
 
-## 📊 Monitoring & Observability
+🔁 Zero-Downtime Rolling Updates — Kubernetes manages rollout and rollback.
 
-- **Grafana** dashboards display metrics from Kubernetes, application performance, and Velero backup status.
-- **Prometheus** scrapes system and container metrics from all Pi nodes.
-- Dashboards are accessible through secure local-only access (or VPN tunnel for remote monitoring).
+🔒 Immutable Builds — Each build is tied to a unique commit SHA tag.
 
----
+🔄 Self-Healing Cluster — Argo CD detects and fixes drift from the desired Git state.
 
-## 🌍 Hosting Architecture
+💻 ARM64 Native Builds — The Pi runner handles builds optimized for ARM hardware.
 
-```plaintext
+🚀 GitOps with Argo CD
+
+Argo CD provides a visual and automated interface for managing deployments.
+It continuously watches the Git repository and ensures that the live Kubernetes state matches the desired configuration in Git.
+
+Features
+
+Real-time sync of master branch → Kubernetes cluster.
+
+Auto-healing: If a pod or deployment is manually changed, Argo restores it from Git.
+
+Automatic cleanup of old resources (via prune policy).
+
+Accessible via: https://argocd.blainweb.com
+
+Integrated with Caddy and Traefik for HTTPS ingress and Let’s Encrypt certificates.
+
+Argo CD Application Configuration
+
+Namespace: argocd
+
+Target Repo: DevOps-Project
+
+Sync Policy: Automated (auto-sync, self-heal, prune)
+
+Managed Paths: k8s/
+
+Namespace for apps: qr
+
+☁️ Backups & Disaster Recovery (Velero + Backblaze B2)
+
+Velero automatically backs up Kubernetes resources and persistent volumes to Backblaze B2.
+
+Configuration Details:
+
+Provider: aws (S3-compatible)
+
+Bucket: velero-blain-backups
+
+Endpoint: https://s3.eu-central-003.backblazeb2.com
+
+Schedule: Daily @ 03:00 UTC
+
+Retention: 5 most recent test backups
+
+Validation Script: scripts/velero-restore-test.sh
+
+Cleanup Script: scripts/velero-cleanup.sh
+
+If Backblaze rate limits are hit, the pipeline marks backup stages as skipped to maintain uptime.
+
+📊 Monitoring & Observability
+
+Grafana + Prometheus are deployed for full cluster and application visibility.
+
+Prometheus scrapes metrics from all Pi nodes and containers.
+
+Grafana dashboards display:
+
+CPU, memory, and disk usage
+
+Pod health and uptime
+
+Velero backup stats
+
+Access via: https://grafana.blainweb.com
+ (secured access only)
+
+🌍 Hosting Architecture
 [Raspberry Pi Cluster]
 ├── k3s / Kubernetes
-│   ├── FastAPI Pod (api)
-│   ├── Next.js Pod (frontend)
+│   ├── FastAPI Pod (qr-backend)
+│   ├── Next.js Pod (qr-frontend)
 │   ├── Velero + Node Agent
 │   ├── Grafana + Prometheus Stack
-│   └── Ingress Controller (NGINX)
+│   ├── Argo CD (GitOps controller)
+│   └── Traefik Ingress Controller
 │
-├── GitHub Actions Runner (self-hosted, ARM64)
-└── Persistent Volume (Backups via Velero → Backblaze B2)
+├── GitHub Actions Runner (Self-Hosted ARM64, always-on)
+└── Persistent Volumes → Backblaze B2 (via Velero)
 
 🧩 Tech Stack Summary
 Category	Technology
@@ -129,32 +173,37 @@ Frontend	Next.js (React, TypeScript)
 Backend	FastAPI (Python)
 Storage	Backblaze B2 (S3-compatible)
 Orchestration	Kubernetes (k3s)
+Continuous Delivery	Argo CD (GitOps)
 CI/CD	GitHub Actions (Self-Hosted ARM64 Runner)
-Containerization	Docker
 Monitoring	Grafana, Prometheus
 Backups	Velero
+Reverse Proxy	Caddy → Traefik
 Hosting	Raspberry Pi (ARM64, Ubuntu Server)
-Domain	qr.blainweb.com
+Domain	blainweb.com
 🎯 Project Goals
 
-The project demonstrates:
+This project demonstrates:
 
-End-to-end DevOps automation from commit to deployment.
+✅ End-to-end DevOps automation — from commit to live deployment.
 
-Running a production-style environment on ARM hardware.
+🧩 Full GitOps workflow via Argo CD.
 
-Real-world CI/CD, backup, and observability practices.
+🧠 Self-hosted CI/CD, monitoring, and recovery pipeline on ARM hardware.
 
-Secure secrets management and self-hosted cloud operations.
+🔐 Secure secrets and image management using GitHub + GHCR.
 
-Hands-on experience with Kubernetes, Velero, and Backblaze integrations.
+💾 Real-world backup & disaster recovery using Velero and Backblaze B2.
+
+📈 Production-style observability and monitoring stack.
 
 ✅ Current Status
 
-All apps (frontend, backend, and supporting services) are live and deployed.
+All apps (frontend, backend, Grafana, Argo CD, Velero) are live and healthy.
 
-Nightly Velero backups are configured and validated.
+Argo CD automatically syncs new deployments from master.
 
-Grafana dashboards monitor system and cluster health.
+Velero runs daily verified backups to Backblaze B2.
 
-CI/CD pipeline deploys automatically via GitHub on every master branch update.
+Grafana dashboards monitor system health.
+
+GitHub Actions deploy pipeline runs entirely on the Raspberry Pi’s self-hosted ARM64 runner.

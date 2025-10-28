@@ -12,7 +12,7 @@ spec:
     targetRevision: master
     path: k8s
   destination:
-    server: https://kubernetes.default.svc
+    name: in-cluster          
     namespace: qr
   syncPolicy:
     automated:
@@ -21,4 +21,4 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - PrunePropagationPolicy=foreground
-      - ApplyOutOfSyncOnly=true
+      - PruneLast=true
