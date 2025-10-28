@@ -23,6 +23,13 @@ spec:
           env:
             - name: NEXT_PUBLIC_API_BASE
               value: /api
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
 ---
 apiVersion: v1
 kind: Service
