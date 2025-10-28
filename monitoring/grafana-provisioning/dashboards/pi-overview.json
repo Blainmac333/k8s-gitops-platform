@@ -201,6 +201,33 @@
         }
       ],
       "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "type": "table",
+      "title": "Container Restarts (last 24h) – namespace=qr",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 60 },
+      "fieldConfig": { "defaults": { "unit": "none" } },
+      "options": { "showHeader": true },
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Value": false } } }
+      ],
+      "targets": [
+        {
+          "expr": "sum by (pod, container) (increase(kube_pod_container_status_restarts_total{namespace=\"qr\"}[24h]))",
+          "legendFormat": "{{pod}}/{{container}}"
+        }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+    {
+      "name": "Velero Backups",
+      "type": "tags",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "enable": true,
+      "iconColor": "rgba(255, 255, 255, 0.9)",
+      "expr": "increase(velero_backup_attempt_total[5m]) > 0",
+      "titleFormat": "Velero backup",
+      "textFormat": "Backup attempt detected"
     }
   ],
   "templating": {
