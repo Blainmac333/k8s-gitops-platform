@@ -1,10 +1,10 @@
-# k8s/qr-backend.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: qr-backend
   namespace: qr
 spec:
+  revisionHistoryLimit: 2
   replicas: 1
   selector:
     matchLabels:
@@ -14,8 +14,6 @@ spec:
       labels:
         app: qr-backend
     spec:
-      imagePullSecrets:
-        - name: ghcr-pull
       containers:
         - name: qr-backend
           image: ghcr.io/blainmac333/qr-backend:latest
@@ -25,30 +23,42 @@ spec:
           env:
             - name: FRONTEND_URL
               valueFrom:
-                secretKeyRef: { name: qr-env, key: FRONTEND_URL }
+                secretKeyRef:
+                  name: qr-env
+                  key: FRONTEND_URL
             - name: QR_CODE_URL
               valueFrom:
-                secretKeyRef: { name: qr-env, key: QR_CODE_URL }
+                secretKeyRef:
+                  name: qr-env
+                  key: QR_CODE_URL
             - name: LOCAL_STORAGE_DIR
               value: /data/qrs
           livenessProbe:
-            httpGet: { path: /health, port: 8000 }
+            httpGet:
+              path: /health
+              port: 8000
             initialDelaySeconds: 10
             periodSeconds: 10
           readinessProbe:
-            httpGet: { path: /health, port: 8000 }
+            httpGet:
+              path: /health
+              port: 8000
             initialDelaySeconds: 5
             periodSeconds: 5
           resources:
-            requests: { cpu: "50m", memory: "128Mi" }
-            limits:   { cpu: "500m", memory: "512Mi" }
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
           volumeMounts:
             - name: qrs
-              mountPath: /data/qrs          
+              mountPath: /data/qrs
       volumes:
         - name: qrs
           persistentVolumeClaim:
-            claimName: qrs-pvc               
+            claimName: qrs-pvc
 ---
 apiVersion: v1
 kind: Service

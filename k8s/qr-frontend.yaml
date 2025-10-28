@@ -1,10 +1,10 @@
-# k8s/qr-frontend.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: qr-frontend
   namespace: qr
 spec:
+  revisionHistoryLimit: 2
   replicas: 1
   selector:
     matchLabels:
@@ -14,8 +14,6 @@ spec:
       labels:
         app: qr-frontend
     spec:
-      imagePullSecrets:
-        - name: ghcr-pull
       containers:
         - name: qr-frontend
           image: ghcr.io/blainmac333/qr-frontend:latest
@@ -23,7 +21,6 @@ spec:
           ports:
             - containerPort: 3000
           env:
-            # keep your Next.js pointing at /api (Traefik will route/strip)
             - name: NEXT_PUBLIC_API_BASE
               value: /api
 ---

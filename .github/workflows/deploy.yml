@@ -12,7 +12,7 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - uses: actions/checkout@v4
@@ -64,6 +64,7 @@ jobs:
       # Make kubectl use the user copy by default
       KUBECONFIG: /home/blain/.kube/config
     steps:
+      - uses: actions/checkout@v4
       - name: Ensure kubeconfig for runner
         run: |
           set -euo pipefail
@@ -77,6 +78,30 @@ jobs:
           kubectl version --client=true || true
           kubectl cluster-info || true
           kubectl get nodes -o wide || true
+      
+      - name: Update k8s image tags to this commit and push (GitOps)
+        if: github.ref == 'refs/heads/master'
+        run: |
+          set -euo pipefail
+          SHA="${GITHUB_SHA}"
+
+          B=./k8s/qr-backend.yaml
+          F=./k8s/qr-frontend.yaml
+
+          # replace qr-backend tag (handles :latest or any previous sha-like tag)
+          sed -i -E "s@(ghcr\.io/.*/qr-backend:)([A-Za-z0-9._-]+|latest)@\\1${SHA}@g" "$B"
+          # replace qr-frontend tag
+          sed -i -E "s@(ghcr\.io/.*/qr-frontend:)([A-Za-z0-9._-]+|latest)@\\1${SHA}@g" "$F"
+
+          git config --global user.email "ci@users.noreply.github.com"
+          git config --global user.name  "ci-bot"
+          git add "$B" "$F"
+          if ! git diff --cached --quiet; then
+            git commit -m "GitOps: pin images to ${SHA}"
+            git push origin master
+          else
+            echo "No image tag changes to commit."
+          fi
 
       - name: Sync repo files on Pi
         run: |
@@ -456,53 +481,53 @@ jobs:
           echo "✅ Ensured ghcr-creds in namespace '$NS'"
 
       # ---------- k3s: apply manifests & pin images to this commit ----------
-      - name: Apply k8s manifests
-        run: |
-          set -e
-          cd ~/apps/devops-qr
-          kubectl apply -R -f k8s/
+      # - name: Apply k8s manifests
+      #   run: |
+      #     set -e
+      #     cd ~/apps/devops-qr
+      #     kubectl apply -R -f k8s/
 
-      - name: Point Deployments at exact images for this commit
-        run: |
-          set -e
-          kubectl -n qr set image deploy/qr-backend  qr-backend=ghcr.io/blainmac333/qr-backend:${{ github.sha }}
-          kubectl -n qr set image deploy/qr-frontend qr-frontend=ghcr.io/blainmac333/qr-frontend:${{ github.sha }}
+      # - name: Point Deployments at exact images for this commit
+      #   run: |
+      #     set -e
+      #     kubectl -n qr set image deploy/qr-backend  qr-backend=ghcr.io/blainmac333/qr-backend:${{ github.sha }}
+      #     kubectl -n qr set image deploy/qr-frontend qr-frontend=ghcr.io/blainmac333/qr-frontend:${{ github.sha }}
 
-      - name: Wait for k8s rollouts (with diagnostics + one-time heal)
-        shell: bash
-        run: |
-          set -euo pipefail
+      # - name: Wait for k8s rollouts (with diagnostics + one-time heal)
+      #   shell: bash
+      #   run: |
+      #     set -euo pipefail
 
-          wait_rollout() {
-            local ns="$1" deploy="$2" label="$3"
+      #     wait_rollout() {
+      #       local ns="$1" deploy="$2" label="$3"
 
-            echo "▶ Waiting for rollout of $ns/$deploy"
-            if kubectl -n "$ns" rollout status "deploy/$deploy" --timeout=600s; then
-              echo "✅ $deploy rolled out"
-              return 0
-            fi
+      #       echo "▶ Waiting for rollout of $ns/$deploy"
+      #       if kubectl -n "$ns" rollout status "deploy/$deploy" --timeout=600s; then
+      #         echo "✅ $deploy rolled out"
+      #         return 0
+      #       fi
 
-            echo "❌ $deploy rollout timed out; collecting diagnostics…"
-            kubectl -n "$ns" get deploy,rs,pods -o wide || true
-            kubectl -n "$ns" describe deploy "$deploy" || true
-            kubectl -n "$ns" get pod -l "$label" -o name | xargs -r kubectl -n "$ns" describe || true
-            kubectl -n "$ns" logs "deploy/$deploy" --tail=200 --all-containers || true
+      #       echo "❌ $deploy rollout timed out; collecting diagnostics…"
+      #       kubectl -n "$ns" get deploy,rs,pods -o wide || true
+      #       kubectl -n "$ns" describe deploy "$deploy" || true
+      #       kubectl -n "$ns" get pod -l "$label" -o name | xargs -r kubectl -n "$ns" describe || true
+      #       kubectl -n "$ns" logs "deploy/$deploy" --tail=200 --all-containers || true
 
-            echo "🧹 Looking for stuck Terminating pods for label: $label"
-            stuck=$(kubectl -n "$ns" get pods | awk -v lbl="$label" '$0 ~ lbl && /Terminating/ {print $1}')
-            if [[ -n "${stuck:-}" ]]; then
-              echo "$stuck" | xargs -r kubectl -n "$ns" delete pod --grace-period=0 --force || true
-              echo "⏳ Retrying rollout after force-deleting stuck pod(s)…"
-              kubectl -n "$ns" rollout status "deploy/$deploy" --timeout=300s && return 0
-            fi
+      #       echo "🧹 Looking for stuck Terminating pods for label: $label"
+      #       stuck=$(kubectl -n "$ns" get pods | awk -v lbl="$label" '$0 ~ lbl && /Terminating/ {print $1}')
+      #       if [[ -n "${stuck:-}" ]]; then
+      #         echo "$stuck" | xargs -r kubectl -n "$ns" delete pod --grace-period=0 --force || true
+      #         echo "⏳ Retrying rollout after force-deleting stuck pod(s)…"
+      #         kubectl -n "$ns" rollout status "deploy/$deploy" --timeout=300s && return 0
+      #       fi
 
-            echo "❌ Rollout still failing for $deploy"
-            return 1
-          }
+      #       echo "❌ Rollout still failing for $deploy"
+      #       return 1
+      #     }
 
-          # Update selectors if your Deployments use different labels
-          wait_rollout qr qr-backend  "app=qr-backend"
-          wait_rollout qr qr-frontend "app=qr-frontend"
+      #     # Update selectors if your Deployments use different labels
+      #     wait_rollout qr qr-backend  "app=qr-backend"
+      #     wait_rollout qr qr-frontend "app=qr-frontend"
 
 
       # ---------- Caddy: reload + end-to-end smoke test ----------
