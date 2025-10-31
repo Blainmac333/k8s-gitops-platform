@@ -10,56 +10,47 @@ spec:
   selector:
     matchLabels:
       app: cadvisor
+  updateStrategy:
+    type: RollingUpdate
   template:
     metadata:
       labels:
         app: cadvisor
+        kubernetes.io/os: linux
     spec:
+      tolerations:
+        - operator: "Exists"     # run even if node is tainted (single-node k3s)
       hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
+      hostPID: true
       containers:
         - name: cadvisor
-          image: gcr.io/cadvisor/cadvisor:v0.47.2
+          image: gcr.io/cadvisor/cadvisor:v0.49.1
+          imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
+          args:
+            - --port=8080
+            - --housekeeping_interval=10s
+            - --enable_load_reader=true
+            - --store_container_labels=false
+            # NOTE: no --enable_metrics=... (kept defaults to avoid unsupported values)
           ports:
             - name: http
               containerPort: 8080
-          args:
-            - --enable_metrics=cpu,cpuset,disk,diskIO,filesystem,memory,network,process
-            - --housekeeping_interval=10s
           volumeMounts:
-            - name: rootfs
-              mountPath: /rootfs
-              readOnly: true
-            - name: var-run
-              mountPath: /var/run
-              readOnly: false
-            - name: sys
-              mountPath: /sys
-              readOnly: true
-            - name: cgroup
-              mountPath: /sys/fs/cgroup
-              readOnly: true
-            - name: containerd
-              mountPath: /var/lib/containerd
-              readOnly: true
-            - name: kubelet
-              mountPath: /var/lib/kubelet
-              readOnly: true
+            - { name: rootfs,         mountPath: /rootfs,           readOnly: true }
+            - { name: var-run,        mountPath: /var/run }
+            - { name: sys,            mountPath: /sys,              readOnly: true }
+            - { name: cgroup,         mountPath: /sys/fs/cgroup,    readOnly: true }
+            - { name: containerd-lib, mountPath: /var/lib/containerd, readOnly: true }
+            - { name: containerd-run, mountPath: /run/containerd,   readOnly: true }
       volumes:
-        - name: rootfs
-          hostPath: { path: /, type: Directory }
-        - name: var-run
-          hostPath: { path: /var/run, type: Directory }
-        - name: sys
-          hostPath: { path: /sys, type: Directory }
-        - name: cgroup
-          hostPath: { path: /sys/fs/cgroup, type: Directory }
-        - name: containerd
-          hostPath: { path: /var/lib/containerd, type: Directory }
-        - name: kubelet
-          hostPath: { path: /var/lib/kubelet, type: Directory }
+        - { name: rootfs,         hostPath: { path: / } }
+        - { name: var-run,        hostPath: { path: /var/run } }
+        - { name: sys,            hostPath: { path: /sys } }
+        - { name: cgroup,         hostPath: { path: /sys/fs/cgroup } }
+        - { name: containerd-lib, hostPath: { path: /var/lib/containerd } }
+        - { name: containerd-run, hostPath: { path: /run/containerd } }
 ---
 apiVersion: v1
 kind: Service
