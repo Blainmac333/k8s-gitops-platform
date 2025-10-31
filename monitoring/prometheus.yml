@@ -22,4 +22,10 @@ scrape_configs:
   - job_name: 'kube-state-metrics'
     scrape_interval: 30s
     static_configs:
-      - targets: ['192.168.1.106:30090'] 
+      - targets: ['192.168.1.106:30090']
+
+  # cAdvisor on Kubernetes Nodes
+  - job_name: 'cadvisor-k8s'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['192.168.1.106:31090']

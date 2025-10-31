@@ -257,6 +257,21 @@ jobs:
       - name: Ensure Grafana admin password
         run: docker exec grafana grafana-cli admin reset-admin-password '${{ secrets.GRAFANA_ADMIN_PASSWORD }}' || true
 
+      - name: Verify Prometheus is scraping cadvisor-k8s
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROM=$(docker ps --format '{{.Names}}' | grep -i prometheus | head -n1)
+
+          echo "Active targets for cadvisor-k8s:"
+          docker exec "$PROM" wget -qO- 'http://localhost:9090/api/v1/targets' \
+            | jq -r '.data.activeTargets[] | select(.labels.job=="cadvisor-k8s") | "\(.health) -> \(.discoveredLabels.__address__)"'
+
+          echo "up{job=\"cadvisor-k8s\"}:"
+          docker exec "$PROM" wget -qO- \
+            'http://localhost:9090/api/v1/query?query=up{job="cadvisor-k8s"}' \
+            | jq -r '.data.result[]?.value'
+
       # -------- Velero (Backblaze B2) --------
       - name: Init Velero env defaults
         run: echo "SKIP_VELERO_SMOKE=0" >> "$GITHUB_ENV"
@@ -455,7 +470,31 @@ jobs:
           kubectl -n metallb-system logs -l app=metallb,speaker --tail=100 || true
           exit 1
       # -------- END NEW --------
-   
+
+      # -------- Install/upgrade cAdvisor DaemonSet --------
+      - name: Install/upgrade cAdvisor DaemonSet (k3s/containerd)
+        run: |
+          set -e
+          cd ~/apps/devops-qr
+          kubectl apply -f monitoring/cadvisor-daemonset.yaml
+
+      - name: Wait for cAdvisor & verify Service/metrics
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Wait until the DaemonSet is ready
+          kubectl -n kube-system rollout status ds/cadvisor --timeout=180s
+
+          echo "Service:"
+          kubectl -n kube-system get svc cadvisor -o wide
+
+          # Quick smoke: curl NodePort from the Pi LAN IP
+          IP=$(hostname -I | awk '{print $1}')
+          echo "Curling http://$IP:31090/metrics ..."
+          curl -sf "http://$IP:31090/metrics" | head -n 10
+
+      # -------- END NEW --------
       - name: Ensure GHCR pull secret (qr namespace)
         shell: bash
         env:
