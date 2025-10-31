@@ -472,7 +472,6 @@ jobs:
       # -------- END NEW --------
 
       # -------- Install/upgrade cAdvisor DaemonSet --------
-# -------- Install/upgrade cAdvisor DaemonSet --------
       - name: Install/upgrade cAdvisor DaemonSet (k3s/containerd)
         run: |
           set -e
