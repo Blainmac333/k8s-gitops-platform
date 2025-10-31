@@ -489,10 +489,54 @@ jobs:
           echo "Service:"
           kubectl -n kube-system get svc cadvisor -o wide
 
-          # Quick smoke: curl NodePort from the Pi LAN IP
+          # Pick one cAdvisor pod
+          POD=$(kubectl -n kube-system get pod -l app=cadvisor -o jsonpath='{.items[0].metadata.name}')
+
+          echo "Port-forward cadvisor pod and curl /metrics"
+          kubectl -n kube-system port-forward "pod/${POD}" 18080:8080 --address 127.0.0.1 >/tmp/cadvisor-pf.log 2>&1 &
+          PF_PID=$!
+          # Ensure cleanup even if the script bails out
+          trap 'kill $PF_PID 2>/dev/null || true' EXIT
+
+          # Give the port-forward a moment to start
+          for i in {1..10}; do
+            if curl -sf http://127.0.0.1:18080/metrics >/dev/null; then
+              echo "✅ cAdvisor metrics reachable via port-forward"
+              break
+            fi
+            sleep 1
+          done
+
+          # If still not reachable, show some diagnostics and fail
+          if ! curl -sf http://127.0.0.1:18080/metrics | head -n 10; then
+            echo "❌ Could not reach cAdvisor via port-forward"
+            echo "--- port-forward logs ---"
+            tail -n +1 /tmp/cadvisor-pf.log || true
+            kubectl -n kube-system get pods -l app=cadvisor -o wide || true
+            kubectl -n kube-system logs "$POD" --tail=200 || true
+            exit 1
+          fi
+
+          # Explicitly kill and clear the trap
+          kill $PF_PID 2>/dev/null || true
+          trap - EXIT
+
+      - name: Best-effort NodePort curl (doesn’t fail build)
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euo pipefail
           IP=$(hostname -I | awk '{print $1}')
-          echo "Curling http://$IP:31090/metrics ..."
-          curl -sf "http://$IP:31090/metrics" | head -n 10
+          for i in {1..15}; do
+            if curl -sf "http://$IP:31090/metrics" >/dev/null; then
+              echo "✅ NodePort reachable"
+              # Show a preview line or two for logs:
+              curl -sf "http://$IP:31090/metrics" | head -n 5 || true
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "⚠️ NodePort not reachable yet, continuing (Prometheus will retry)"
 
       # -------- END NEW --------
       - name: Ensure GHCR pull secret (qr namespace)
