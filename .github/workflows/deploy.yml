@@ -259,27 +259,33 @@ jobs:
             sleep 2
           done
 
-      - name: Ensure Prometheus picked up prometheus.yml (reload + sanity)
-        shell: bash
-        run: |
-          set -euo pipefail
-          HOST_FILE=/home/blain/apps/devops-qr/monitoring/prometheus.yml
-          echo "---- host prometheus.yml grep ----"
-          grep -n "job_name: *velero" "$HOST_FILE" || { echo "❌ velero job missing in host file"; exit 1; }
-          grep -n "job_name: *cadvisor-k8s" "$HOST_FILE" || { echo "❌ cadvisor-k8s job missing in host file"; exit 1; }
+        - name: Ensure Prometheus picked up prometheus.yml (reload + sanity)
+          shell: bash
+          run: |
+            set -euo pipefail
+            HOST_FILE=/home/blain/apps/devops-qr/monitoring/prometheus.yml
 
-          PROM=$(docker ps --format '{{.Names}}' | grep -i prometheus | head -n1)
+            echo "---- host prometheus.yml grep ----"
+            # Accept optional quotes and any whitespace
+            grep -En "job_name:[[:space:]]*['\"]?velero['\"]?" "$HOST_FILE" \
+              || { echo "❌ velero job missing in host file"; exit 1; }
+            grep -En "job_name:[[:space:]]*['\"]?cadvisor-k8s['\"]?" "$HOST_FILE" \
+              || { echo "❌ cadvisor-k8s job missing in host file"; exit 1; }
 
-          echo "→ Reload Prometheus config"
-          docker exec "$PROM" wget -qO- --post-data="" http://localhost:9090/-/reload >/dev/null 2>&1 || true
+            PROM=$(docker ps --format '{{.Names}}' | grep -i prometheus | head -n1)
 
-          echo "---- container prometheus.yml grep ----"
-          docker exec "$PROM" sh -lc 'grep -n "job_name: *velero" /etc/prometheus/prometheus.yml || echo "❌ velero job not found inside container"'
-          docker exec "$PROM" sh -lc 'grep -n "job_name: *cadvisor-k8s" /etc/prometheus/prometheus.yml || echo "❌ cadvisor-k8s job not found inside container"'
+            echo "→ Reload Prometheus config"
+            docker exec "$PROM" wget -qO- --post-data="" http://localhost:9090/-/reload >/dev/null 2>&1 || true
 
-          echo "---- active targets ----"
-          docker exec "$PROM" wget -qO- 'http://localhost:9090/api/v1/targets' \
-            | jq -r '.data.activeTargets[] | select(.labels.job=="velero" or .labels.job=="cadvisor-k8s") | "\(.labels.job)\t\(.health)\t\(.discoveredLabels.__address__)\t\(.lastError)"'
+            echo "---- container prometheus.yml grep ----"
+            docker exec "$PROM" sh -lc "grep -En \"job_name:[[:space:]]*['\\\"]?velero['\\\"]?\" /etc/prometheus/prometheus.yml || echo '❌ velero job not found inside container'"
+            docker exec "$PROM" sh -lc "grep -En \"job_name:[[:space:]]*['\\\"]?cadvisor-k8s['\\\"]?\" /etc/prometheus/prometheus.yml || echo '❌ cadvisor-k8s job not found inside container'"
+
+            echo "---- active targets ----"
+            docker exec "$PROM" wget -qO- 'http://localhost:9090/api/v1/targets' \
+              | jq -r '.data.activeTargets[]
+                      | select(.labels.job=="velero" or .labels.job=="cadvisor-k8s")
+                      | "\(.labels.job)\t\(.health)\t\(.discoveredLabels.__address__)\t\(.lastError)"'
 
       - name: Wait for Grafana health
         run: |
