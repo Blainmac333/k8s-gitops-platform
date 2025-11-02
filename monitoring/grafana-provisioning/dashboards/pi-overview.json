@@ -179,8 +179,8 @@
       "options": { "legend": { "showLegend": true, "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
         {
-          "expr": "(sum by (pod, name) (container_memory_working_set_bytes{namespace=\"qr\", image!=\"\"})) / 1024 / 1024",
-          "legendFormat": "{{pod}}/{{name}}"
+          "expr": "sum by (container_label_io_kubernetes_pod_name, name)(container_memory_working_set_bytes{job=\"cadvisor-k8s\",image!=\"\",container_label_io_kubernetes_pod_namespace=\"qr\"}) / 1024 / 1024",
+          "legendFormat": "{{container_label_io_kubernetes_pod_name}}/{{name}}"
         }
       ],
       "datasource": { "type": "prometheus", "uid": "prometheus" }
@@ -193,8 +193,8 @@
       "options": { "displayMode": "gradient" },
       "targets": [
         {
-          "expr": "topk(8, ( max_over_time((sum by (pod, name) (container_memory_working_set_bytes{namespace=\"qr\", image!=\"\"}))[$__range:1m]) - min_over_time((sum by (pod, name) (container_memory_working_set_bytes{namespace=\"qr\", image!=\"\"}))[$__range:1m]) ) / 1024 / 1024 )",
-          "legendFormat": "{{pod}}/{{name}}"
+          "expr": "topk(8,(max_over_time(sum by (container_label_io_kubernetes_pod_name, name)(container_memory_working_set_bytes{job=\"cadvisor-k8s\",image!=\"\",container_label_io_kubernetes_pod_namespace=\"qr\"})[$__range:1m])-min_over_time(sum by (container_label_io_kubernetes_pod_name, name)(container_memory_working_set_bytes{job=\"cadvisor-k8s\",image!=\"\",container_label_io_kubernetes_pod_namespace=\"qr\"})[$__range:1m])) / 1024 / 1024)",
+          "legendFormat": "{{container_label_io_kubernetes_pod_name}}/{{name}}"
         }
       ],
       "datasource": { "type": "prometheus", "uid": "prometheus" }
