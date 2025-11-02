@@ -530,22 +530,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Wait until the DaemonSet is ready
+          # 1) Wait until the DaemonSet is ready
           kubectl -n kube-system rollout status ds/cadvisor --timeout=180s
 
           echo "Service:"
           kubectl -n kube-system get svc cadvisor -o wide
 
-          # Pick one cAdvisor pod
+          # 2) Pick one cAdvisor pod
           POD=$(kubectl -n kube-system get pod -l app=cadvisor -o jsonpath='{.items[0].metadata.name}')
 
+          # 3) Port-forward and probe /metrics
           echo "Port-forward cadvisor pod and curl /metrics"
           kubectl -n kube-system port-forward "pod/${POD}" 18080:8080 --address 127.0.0.1 >/tmp/cadvisor-pf.log 2>&1 &
           PF_PID=$!
-          # Ensure cleanup even if the script bails out
-          trap 'kill $PF_PID 2>/dev/null || true' EXIT
+          cleanup() { kill "$PF_PID" 2>/dev/null || true; }
+          trap cleanup EXIT
 
-          # Give the port-forward a moment to start
+          # Wait up to ~10s for the PF to come up
           for i in {1..10}; do
             if curl -sf http://127.0.0.1:18080/metrics >/dev/null; then
               echo "✅ cAdvisor metrics reachable via port-forward"
@@ -554,8 +555,8 @@ jobs:
             sleep 1
           done
 
-          # If still not reachable, show some diagnostics and fail
-          if ! curl -sf http://127.0.0.1:18080/metrics | head -n 10; then
+          # 4) Fetch once into a file (avoid pipefail+head issue)
+          if ! curl -sf http://127.0.0.1:18080/metrics -o /tmp/cadvisor.metrics; then
             echo "❌ Could not reach cAdvisor via port-forward"
             echo "--- port-forward logs ---"
             tail -n +1 /tmp/cadvisor-pf.log || true
@@ -564,8 +565,11 @@ jobs:
             exit 1
           fi
 
-          # Explicitly kill and clear the trap
-          kill $PF_PID 2>/dev/null || true
+          # Just *display* a preview
+          head -n 10 /tmp/cadvisor.metrics || true
+
+          # 5) Clean up PF explicitly (trap will also do it)
+          cleanup
           trap - EXIT
 
       - name: Best-effort NodePort curl (doesn’t fail build)
