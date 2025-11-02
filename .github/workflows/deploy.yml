@@ -244,8 +244,20 @@ jobs:
         run: |
           set -e
           cd ~/apps/devops-qr
-          # Ensure the Services exist on every deploy
-          kubectl -n velero apply -f velero/metrics-service.yaml
+          # Apply the Services from the correct path
+          kubectl -n velero apply -f infra/velero/metrics-service.yaml
+
+          # Quick sanity: list the services we just applied
+          kubectl -n velero get svc velero-metrics velero-metrics-nodeport -o wide
+
+          # (optional) Wait until Endpoints are populated
+          for i in $(seq 1 15); do
+            if kubectl -n velero get endpoints velero-metrics -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null | grep -q .; then
+              echo "✅ velero-metrics endpoints are ready"
+              break
+            fi
+            sleep 2
+          done
 
       - name: Ensure Prometheus picked up prometheus.yml (reload + sanity)
         shell: bash
