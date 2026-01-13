@@ -83,6 +83,17 @@ jobs:
           kubectl version --client=true || true
           kubectl cluster-info || true
           kubectl get nodes -o wide || true
+
+      - name: Ensure GHCR pull secret exists
+        run: |
+          kubectl -n qr create secret docker-registry ghcr-pull \
+            --docker-server=ghcr.io \
+            --docker-username="${{ secrets.GHCR_USERNAME }}" \
+            --docker-password="${{ secrets.GHCR_PULL_TOKEN }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl -n qr patch serviceaccount default \
+            -p '{"imagePullSecrets":[{"name":"ghcr-pull"}]}' || true
       
       - name: Update k8s image tags to this commit and push (GitOps)
         if: github.ref == 'refs/heads/master'
