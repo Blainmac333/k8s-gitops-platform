@@ -95,19 +95,46 @@ jobs:
           B=./k8s/qr-backend.yaml
           F=./k8s/qr-frontend.yaml
 
-          sed -i -E "s@(ghcr\.io/.*/qr-backend:)([A-Za-z0-9._-]+|latest)@\\1${SHA}@g" "$B"
-          sed -i -E "s@(ghcr\.io/.*/qr-frontend:)([A-Za-z0-9._-]+|latest)@\\1${SHA}@g" "$F"
+          sed -i -E "s@(ghcr\.io/.*/qr-backend:)([A-Za-z0-9._-]+|latest)@\1${SHA}@g" "$B"
+          sed -i -E "s@(ghcr\.io/.*/qr-frontend:)([A-Za-z0-9._-]+|latest)@\1${SHA}@g" "$F"
 
           git config --global user.email "ci@users.noreply.github.com"
           git config --global user.name  "ci-bot"
+
           git add "$B" "$F"
-          if ! git diff --cached --quiet; then
-            git commit -m "GitOps: pin images to ${SHA}"
-            # Push using explicit auth so it works on self-hosted
-            git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:master
-          else
+
+          if git diff --cached --quiet; then
             echo "No image tag changes to commit."
+            exit 0
           fi
+
+          git commit -m "GitOps: pin images to ${SHA}"
+
+          # Push using explicit auth so it works on self-hosted, but handle non-fast-forward safely.
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+
+          for attempt in 1 2 3 4 5; do
+            echo "Push attempt ${attempt}..."
+
+            # Ensure we're based on latest master before pushing (avoids non-fast-forward)
+            git fetch "$REMOTE" master
+
+            # Rebase our new commit on top of latest master
+            git rebase FETCH_HEAD
+
+            # Try push
+            if git push "$REMOTE" HEAD:master; then
+              echo "Push succeeded."
+              exit 0
+            fi
+
+            echo "Push failed (likely race). Retrying in 3s..."
+            sleep 3
+          done
+
+          echo "Push failed after 5 attempts."
+          exit 1
+
 
       - name: Sync repo files on Pi
         run: |
