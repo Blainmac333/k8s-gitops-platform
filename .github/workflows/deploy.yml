@@ -2,7 +2,9 @@ name: Build, Push, and Deploy to Pi
 
 on:
   push:
-    branches: [ master ]
+    branches:
+      - master
+  workflow_dispatch:
 
 concurrency:
   group: deploy-pi
