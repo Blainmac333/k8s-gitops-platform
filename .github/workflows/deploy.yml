@@ -195,11 +195,26 @@ jobs:
           fi
 
           echo "⏳ Waiting for server & repo-server rollouts…"
-          kubectl -n "$NS" rollout status deploy -l app.kubernetes.io/name=argocd-server --timeout=300s
-          kubectl -n "$NS" rollout status deploy -l app.kubernetes.io/name=argocd-repo-server --timeout=300s
+          kubectl -n "$NS" rollout status deploy -l app.kubernetes.io/name=argocd-server --timeout=600s || {
+            echo "❌ argocd-server rollout timed out. Pod state:"
+            kubectl -n "$NS" get pods -l app.kubernetes.io/name=argocd-server -o wide || true
+            kubectl -n "$NS" describe pods -l app.kubernetes.io/name=argocd-server || true
+            exit 1
+          }
+          kubectl -n "$NS" rollout status deploy -l app.kubernetes.io/name=argocd-repo-server --timeout=600s || {
+            echo "❌ argocd-repo-server rollout timed out. Pod state:"
+            kubectl -n "$NS" get pods -l app.kubernetes.io/name=argocd-repo-server -o wide || true
+            kubectl -n "$NS" describe pods -l app.kubernetes.io/name=argocd-repo-server || true
+            exit 1
+          }
 
           echo "⏳ Waiting for application-controller (StatefulSet)…"
-          kubectl -n "$NS" rollout status statefulset -l app.kubernetes.io/name=argocd-application-controller --timeout=300s
+          kubectl -n "$NS" rollout status statefulset -l app.kubernetes.io/name=argocd-application-controller --timeout=600s || {
+            echo "❌ argocd-application-controller rollout timed out. Pod state:"
+            kubectl -n "$NS" get pods -l app.kubernetes.io/name=argocd-application-controller -o wide || true
+            kubectl -n "$NS" describe pods -l app.kubernetes.io/name=argocd-application-controller || true
+            exit 1
+          }
 
           echo "✅ Argo CD core is Ready."
 
