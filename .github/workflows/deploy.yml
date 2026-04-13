@@ -261,17 +261,10 @@ jobs:
           EOF
           chmod 600 grafana.env
 
-      - name: Docker login to GHCR on Pi
-        run: |
-          echo "${{ secrets.GHCR_PULL_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
-
       - name: Pull and restart stack on Pi (Docker services like Grafana)
         run: |
           set -e
           cd ~/apps/devops-qr
-          if [ -n "${{ secrets.GHCR_PAT }}" ]; then
-            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
-          fi
           if command -v docker-compose >/dev/null 2>&1; then
             docker-compose pull
             docker-compose up -d

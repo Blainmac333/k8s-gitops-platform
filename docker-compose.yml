@@ -11,22 +11,6 @@ services:
       - ./cv-site:/srv/cv:ro
     restart: unless-stopped
 
-  backend:
-    image: ghcr.io/blainmac333/qr-backend:latest
-    container_name: qr-backend
-    env_file:
-      - ./api.env
-    volumes:
-      - ./data/qrs:/data/qrs
-    restart: unless-stopped
-
-  frontend:
-    image: ghcr.io/blainmac333/qr-frontend:latest
-    container_name: qr-frontend
-    depends_on:
-      - backend
-    restart: unless-stopped
-
   # ---------- Monitoring stack ----------
   prometheus:
     image: prom/prometheus:latest
