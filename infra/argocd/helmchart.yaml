@@ -16,6 +16,17 @@ spec:
       replicas: 1
 
     server:
+      # Give the Pi enough time to start Argo CD before probes fire.
+      # Default initialDelaySeconds=10 is too short for ARM64 — the server
+      # gets killed by its own liveness probe before it finishes starting.
+      livenessProbe:
+        initialDelaySeconds: 90
+        periodSeconds: 10
+        failureThreshold: 5
+      readinessProbe:
+        initialDelaySeconds: 60
+        periodSeconds: 10
+        failureThreshold: 5
       # ClusterIP; Traefik Ingress will front it
       service:
         type: ClusterIP
