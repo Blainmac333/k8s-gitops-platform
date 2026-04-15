@@ -86,6 +86,8 @@ jobs:
 
       - name: Ensure GHCR pull secret exists
         run: |
+          kubectl get ns qr >/dev/null 2>&1 || kubectl create ns qr
+
           kubectl -n qr create secret docker-registry ghcr-pull \
             --docker-server=ghcr.io \
             --docker-username="${{ secrets.GHCR_USERNAME }}" \
