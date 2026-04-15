@@ -460,7 +460,28 @@ jobs:
           fi
 
           echo "⏳ Waiting for velero rollout…"
-          kubectl -n velero rollout status deploy/velero --timeout=180s
+          # During a Helm upgrade the controller briefly deletes and recreates the
+          # Deployment, which causes 'rollout status' to exit with "object has been
+          # deleted". Retry a few times to ride out that window.
+          ROLLED_OUT=false
+          for attempt in {1..3}; do
+            if kubectl -n velero rollout status deploy/velero --timeout=180s; then
+              ROLLED_OUT=true
+              break
+            fi
+            echo "⚠️  rollout status failed (attempt $attempt/3) — waiting for Deployment to stabilise..."
+            sleep 15
+            for i in {1..20}; do
+              kubectl -n velero get deploy/velero >/dev/null 2>&1 && break || true
+              sleep 3
+            done
+          done
+          if [[ "$ROLLED_OUT" != "true" ]]; then
+            echo "❌ velero rollout did not complete after 3 attempts"
+            kubectl -n velero get pods -o wide || true
+            kubectl -n velero describe deploy/velero || true
+            exit 1
+          fi
           kubectl -n velero get pods -o wide || true
           kubectl -n velero get ds/node-agent -o wide || true
 
