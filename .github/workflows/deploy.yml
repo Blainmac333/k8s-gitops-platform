@@ -235,29 +235,47 @@ jobs:
       - name: Wait for qr-app to sync & become Healthy
         run: |
           set -e
-          # wait up to ~10 minutes for first sync (Pi needs time to pull images)
-          for i in $(seq 1 120); do
+
+          # Phase 1: wait for ArgoCD to sync (up to 5 min).
+          # Sync=Synced means ArgoCD has applied the new image tag to the Deployments.
+          # Health can lag significantly on a Pi, so we don't block on it here.
+          echo "Waiting for ArgoCD sync..."
+          SYNC=""
+          for i in $(seq 1 60); do
             SYNC=$(kubectl -n argocd get application qr-app -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "")
             HEALTH=$(kubectl -n argocd get application qr-app -o jsonpath='{.status.health.status}' 2>/dev/null || echo "")
             echo "qr-app -> sync=${SYNC:-?} health=${HEALTH:-?}"
-            if [ "$SYNC" = "Synced" ] && [ "$HEALTH" = "Healthy" ]; then
-              exit 0
-            fi
+            [ "$SYNC" = "Synced" ] && break
             sleep 5
           done
-          echo "Argo CD app didn't reach Healthy+Synced in time"
-          kubectl -n argocd get application qr-app -o yaml | sed -n '1,200p' || true
-          echo "=== Pod states ==="
-          kubectl -n qr get pods -o wide || true
-          echo "=== PVC status ==="
-          kubectl -n qr get pvc || true
-          echo "=== Pod events / describe ==="
-          kubectl -n qr describe pods || true
-          echo "=== Backend logs (last 80 lines) ==="
-          kubectl -n qr logs deploy/qr-backend --tail=80 --all-containers || true
-          echo "=== Frontend logs (last 40 lines) ==="
-          kubectl -n qr logs deploy/qr-frontend --tail=40 --all-containers || true
-          exit 1
+
+          if [ "${SYNC:-}" != "Synced" ]; then
+            echo "ArgoCD did not reach Synced in time"
+            kubectl -n argocd get application qr-app -o yaml | sed -n '1,200p' || true
+            exit 1
+          fi
+
+          echo "ArgoCD synced. Waiting for deployment rollouts..."
+
+          # Phase 2: wait for the actual Deployment rollouts (up to 10 min each).
+          # kubectl rollout status is authoritative — it watches the Deployment directly
+          # and passes as soon as the new pods are available, without ArgoCD lag.
+          kubectl -n qr rollout status deploy/qr-backend --timeout=600s || {
+            echo "=== qr-backend rollout failed ==="
+            kubectl -n qr get pods -o wide || true
+            kubectl -n qr describe pods -l app=qr-backend || true
+            kubectl -n qr logs deploy/qr-backend --tail=80 --all-containers || true
+            exit 1
+          }
+          kubectl -n qr rollout status deploy/qr-frontend --timeout=600s || {
+            echo "=== qr-frontend rollout failed ==="
+            kubectl -n qr get pods -o wide || true
+            kubectl -n qr describe pods -l app=qr-frontend || true
+            kubectl -n qr logs deploy/qr-frontend --tail=40 --all-containers || true
+            exit 1
+          }
+
+          echo "Both deployments rolled out successfully."
 
       # --- keep provisioning dirs clean on every deploy ---
       - name: Remove untracked provisioning files
