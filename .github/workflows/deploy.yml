@@ -247,6 +247,16 @@ jobs:
           done
           echo "Argo CD app didn't reach Healthy+Synced in time"
           kubectl -n argocd get application qr-app -o yaml | sed -n '1,200p' || true
+          echo "=== Pod states ==="
+          kubectl -n qr get pods -o wide || true
+          echo "=== PVC status ==="
+          kubectl -n qr get pvc || true
+          echo "=== Pod events / describe ==="
+          kubectl -n qr describe pods || true
+          echo "=== Backend logs (last 80 lines) ==="
+          kubectl -n qr logs deploy/qr-backend --tail=80 --all-containers || true
+          echo "=== Frontend logs (last 40 lines) ==="
+          kubectl -n qr logs deploy/qr-frontend --tail=40 --all-containers || true
           exit 1
 
       # --- keep provisioning dirs clean on every deploy ---
