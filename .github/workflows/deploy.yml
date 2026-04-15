@@ -235,8 +235,8 @@ jobs:
       - name: Wait for qr-app to sync & become Healthy
         run: |
           set -e
-          # wait up to ~5 minutes for first sync
-          for i in $(seq 1 60); do
+          # wait up to ~10 minutes for first sync (Pi needs time to pull images)
+          for i in $(seq 1 120); do
             SYNC=$(kubectl -n argocd get application qr-app -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "")
             HEALTH=$(kubectl -n argocd get application qr-app -o jsonpath='{.status.health.status}' 2>/dev/null || echo "")
             echo "qr-app -> sync=${SYNC:-?} health=${HEALTH:-?}"
