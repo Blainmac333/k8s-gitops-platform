@@ -585,12 +585,29 @@ jobs:
       # -------- end Velero --------
 
       # -------- NEW: wait for cert-manager, apply infra, wait for MetalLB, verify Traefik LB IP --------
+      - name: Install cert-manager via HelmChart
+        run: |
+          set -e
+          cd ~/apps/devops-qr
+          kubectl apply -f infra/cert-manager/helmchart.yaml
+
+          # Wait up to 5 min for the Helm controller to create the cert-manager deployments
+          echo "Waiting for cert-manager deployments to appear..."
+          for i in {1..60}; do
+            CNT=$(kubectl -n cert-manager get deploy --no-headers 2>/dev/null | wc -l | xargs)
+            if [[ "${CNT:-0}" -ge 3 ]]; then
+              echo "Found $CNT cert-manager deployments."
+              break
+            fi
+            sleep 5
+          done
+
       - name: Wait for cert-manager to be Available
         run: |
           set -e
-          kubectl -n cert-manager rollout status deploy/cert-manager --timeout=120s
-          kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=120s
-          kubectl -n cert-manager rollout status deploy/cert-manager-cainjector --timeout=120s
+          kubectl -n cert-manager rollout status deploy/cert-manager --timeout=300s
+          kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=300s
+          kubectl -n cert-manager rollout status deploy/cert-manager-cainjector --timeout=300s
 
       - name: Apply cluster infra (MetalLB, Traefik, ClusterIssuer)
         run: |
