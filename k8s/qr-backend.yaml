@@ -22,15 +22,9 @@ spec:
             - containerPort: 8000
           env:
             - name: FRONTEND_URL
-              valueFrom:
-                secretKeyRef:
-                  name: qr-env
-                  key: FRONTEND_URL
+              value: "https://qr.blainweb.com"
             - name: QR_CODE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: qr-env
-                  key: QR_CODE_URL
+              value: "https://qr.blainweb.com"
             - name: LOCAL_STORAGE_DIR
               value: /data/qrs
           livenessProbe:
