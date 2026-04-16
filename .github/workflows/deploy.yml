@@ -631,7 +631,7 @@ jobs:
           # ready. Without this, applying IPAddressPool / L2Advertisement fails with
           # "no endpoints available for service metallb-webhook-service".
           echo "Waiting for MetalLB controller rollout..."
-          kubectl -n metallb-system rollout status deploy/controller --timeout=300s
+          kubectl -n metallb-system rollout status deploy/metallb-controller --timeout=300s
 
       - name: Apply cluster infra (MetalLB, Traefik, ClusterIssuer)
         run: |
