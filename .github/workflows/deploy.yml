@@ -609,6 +609,24 @@ jobs:
           kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=300s
           kubectl -n cert-manager rollout status deploy/cert-manager-cainjector --timeout=300s
 
+      - name: Install MetalLB via HelmChart
+        run: |
+          set -e
+          cd ~/apps/devops-qr
+          kubectl apply -f infra/metallb/helmchart.yaml
+
+          # Wait for MetalLB CRDs to exist before we apply IPAddressPool / L2Advertisement
+          echo "Waiting for MetalLB CRDs..."
+          for i in {1..60}; do
+            kubectl get crd ipaddresspools.metallb.io >/dev/null 2>&1 && \
+            kubectl get crd l2advertisements.metallb.io >/dev/null 2>&1 && \
+            echo "MetalLB CRDs ready." && break || true
+            sleep 5
+          done
+
+          # Confirm CRDs actually appeared
+          kubectl get crd ipaddresspools.metallb.io l2advertisements.metallb.io
+
       - name: Apply cluster infra (MetalLB, Traefik, ClusterIssuer)
         run: |
           set -e
