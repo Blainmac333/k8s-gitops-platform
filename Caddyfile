@@ -2,7 +2,9 @@
   auto_https off
 }
 
-http://qr.blainweb.com {
+qr.blainweb.com {
+  tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
+
   # ACME challenge must hit Traefik LB (MetalLB IP)
   handle /.well-known/acme-challenge/* {
     reverse_proxy 192.168.1.220:80 {
