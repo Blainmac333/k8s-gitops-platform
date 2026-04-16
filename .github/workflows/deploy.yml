@@ -627,6 +627,12 @@ jobs:
           # Confirm CRDs actually appeared
           kubectl get crd ipaddresspools.metallb.io l2advertisements.metallb.io
 
+          # Wait for the MetalLB controller (which runs the admission webhook) to be
+          # ready. Without this, applying IPAddressPool / L2Advertisement fails with
+          # "no endpoints available for service metallb-webhook-service".
+          echo "Waiting for MetalLB controller rollout..."
+          kubectl -n metallb-system rollout status deploy/controller --timeout=300s
+
       - name: Apply cluster infra (MetalLB, Traefik, ClusterIssuer)
         run: |
           set -e
