@@ -2,9 +2,7 @@
   auto_https off
 }
 
-qr.blainweb.com {
-  tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
-
+(qr_routes) {
   # ACME challenge must hit Traefik LB (MetalLB IP)
   handle /.well-known/acme-challenge/* {
     reverse_proxy 192.168.1.220:80 {
@@ -25,6 +23,17 @@ qr.blainweb.com {
       header_up Host {host}
     }
   }
+}
+
+# HTTP — used by CI smoke test (localhost:80) and ACME challenges
+http://qr.blainweb.com {
+  import qr_routes
+}
+
+# HTTPS — Cloudflare origin (Full SSL mode) connects here
+qr.blainweb.com {
+  tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key
+  import qr_routes
 }
 
 # CV site — HTTP only at origin
