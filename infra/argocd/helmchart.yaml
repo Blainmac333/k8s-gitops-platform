@@ -35,13 +35,8 @@ spec:
         ingressClassName: traefik
         hosts:
           - argocd.blainweb.com
-        tls:
-          - secretName: argocd-tls
-            hosts:
-              - argocd.blainweb.com
         annotations:
-          kubernetes.io/tls-acme: "true"
-          cert-manager.io/cluster-issuer: "letsencrypt"   # <- change if your ClusterIssuer has a different name
+          traefik.ingress.kubernetes.io/router.entrypoints: web
       # Optional: let ArgoCD serve HTTPS directly behind Traefik
       extraArgs:
         - --insecure
