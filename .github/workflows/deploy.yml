@@ -37,7 +37,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & push backend (ARM64)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./api
           file: ./api/Dockerfile
@@ -48,7 +48,7 @@ jobs:
             ghcr.io/${{ env.OWNER_LC }}/qr-backend:${{ github.sha }}
 
       - name: Build & push frontend (ARM64)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./front-end-nextjs
           file: ./front-end-nextjs/Dockerfile
