@@ -12,6 +12,11 @@ updates:
     directory: "/api"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "pydantic-core"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
 
   # Next.js frontend
   - package-ecosystem: "npm"
