@@ -18,6 +18,9 @@ updates:
     directory: "/front-end-nextjs"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
 
   # Docker — backend
   - package-ecosystem: "docker"
