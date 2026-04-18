@@ -16,6 +16,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 
@@ -111,56 +112,27 @@ jobs:
 
           echo "✅ Ensured ghcr-creds in namespace 'qr'"
       
-      - name: Update k8s image tags to this commit and push (GitOps)
-        if: github.ref == 'refs/heads/master'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pin image tags in k8s manifests
         run: |
           set -euo pipefail
           SHA="${GITHUB_SHA}"
+          sed -i -E "s@(ghcr\.io/.*/qr-backend:)([A-Za-z0-9._-]+|latest)@\1${SHA}@g" ./k8s/qr-backend.yaml
+          sed -i -E "s@(ghcr\.io/.*/qr-frontend:)([A-Za-z0-9._-]+|latest)@\1${SHA}@g" ./k8s/qr-frontend.yaml
 
-          B=./k8s/qr-backend.yaml
-          F=./k8s/qr-frontend.yaml
+      - name: Open GitOps PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "GitOps: pin images to ${{ github.sha }}"
+          branch: gitops/update-${{ github.sha }}
+          title: "GitOps: deploy ${{ github.sha }}"
+          body: |
+            Automated image tag update triggered by merge to master.
 
-          sed -i -E "s@(ghcr\.io/.*/qr-backend:)([A-Za-z0-9._-]+|latest)@\1${SHA}@g" "$B"
-          sed -i -E "s@(ghcr\.io/.*/qr-frontend:)([A-Za-z0-9._-]+|latest)@\1${SHA}@g" "$F"
-
-          git config --global user.email "ci@users.noreply.github.com"
-          git config --global user.name  "ci-bot"
-
-          git add "$B" "$F"
-
-          if git diff --cached --quiet; then
-            echo "No image tag changes to commit."
-            exit 0
-          fi
-
-          git commit -m "GitOps: pin images to ${SHA}"
-
-          # Push using explicit auth so it works on self-hosted, but handle non-fast-forward safely.
-          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
-
-          for attempt in 1 2 3 4 5; do
-            echo "Push attempt ${attempt}..."
-
-            # Ensure we're based on latest master before pushing (avoids non-fast-forward)
-            git fetch "$REMOTE" master
-
-            # Rebase our new commit on top of latest master
-            git rebase FETCH_HEAD
-
-            # Try push
-            if git push "$REMOTE" HEAD:master; then
-              echo "Push succeeded."
-              exit 0
-            fi
-
-            echo "Push failed (likely race). Retrying in 3s..."
-            sleep 3
-          done
-
-          echo "Push failed after 5 attempts."
-          exit 1
+            - `qr-backend:${{ github.sha }}`
+            - `qr-frontend:${{ github.sha }}`
+          base: master
+          labels: gitops
 
 
       - name: Sync repo files on Pi
