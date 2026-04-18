@@ -64,8 +64,9 @@ jobs:
     needs: build-and-push
     runs-on: [self-hosted, Linux, ARM64]
     permissions:
-      contents: write  
+      contents: write
       packages: write
+      pull-requests: write
     env:
       # Make kubectl use the user copy by default
       KUBECONFIG: /home/blain/.kube/config
