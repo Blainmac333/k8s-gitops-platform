@@ -1,0 +1,32 @@
+version: 2
+updates:
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Python backend
+  - package-ecosystem: "pip"
+    directory: "/api"
+    schedule:
+      interval: "weekly"
+
+  # Next.js frontend
+  - package-ecosystem: "npm"
+    directory: "/front-end-nextjs"
+    schedule:
+      interval: "weekly"
+
+  # Docker — backend
+  - package-ecosystem: "docker"
+    directory: "/api"
+    schedule:
+      interval: "weekly"
+
+  # Docker — frontend
+  - package-ecosystem: "docker"
+    directory: "/front-end-nextjs"
+    schedule:
+      interval: "weekly"
