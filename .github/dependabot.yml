@@ -17,6 +17,12 @@ updates:
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
       - dependency-name: "pydantic-core"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "boto3"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "botocore"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "s3transfer"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
 
   # Next.js frontend
   - package-ecosystem: "npm"
