@@ -39,7 +39,7 @@ jobs:
 
       - name: Plan
         id: plan
-        run: terraform plan -no-color
+        run: terraform plan -no-color -lock=false
         continue-on-error: true
 
       - name: Post plan to PR
