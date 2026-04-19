@@ -1,3 +1,4 @@
+# blainweb.com subdomains routed through Cloudflare Tunnel qr-pi
 locals {
   tunnel_cname = "${var.tunnel_id}.cfargotunnel.com"
 
