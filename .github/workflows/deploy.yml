@@ -121,6 +121,7 @@ jobs:
           sed -i -E "s@(ghcr\.io/.*/qr-frontend:)([A-Za-z0-9._-]+|latest)@\1${SHA}@g" ./k8s/qr-frontend.yaml
 
       - name: Open GitOps PR
+        id: create-pr
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -134,7 +135,15 @@ jobs:
             - `qr-frontend:${{ github.sha }}`
           base: master
           labels: gitops
-          enable-pull-request-automerge: true
+
+      - name: Merge GitOps PR
+        if: steps.create-pr.outputs.pull-request-number != ''
+        run: |
+          curl -X PUT \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ steps.create-pr.outputs.pull-request-number }}/merge" \
+            -d '{"merge_method":"merge"}'
 
       - name: Sync repo files on Pi
         run: |
