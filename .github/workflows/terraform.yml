@@ -17,6 +17,8 @@ jobs:
         working-directory: terraform
 
     env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.B2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_SECRET_ACCESS_KEY }}
       TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       TF_VAR_cloudflare_zone_id: ${{ secrets.CLOUDFLARE_ZONE_ID }}
 
@@ -26,7 +28,6 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.9.0"
-          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
       - name: Init
         run: terraform init
@@ -39,7 +40,7 @@ jobs:
 
       - name: Plan
         id: plan
-        run: terraform plan -no-color -lock=false
+        run: terraform plan -no-color
         continue-on-error: true
 
       - name: Post plan to PR
@@ -65,4 +66,4 @@ jobs:
 
       - name: Apply
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        run: terraform apply -auto-approve -lock=false
+        run: terraform apply -auto-approve
