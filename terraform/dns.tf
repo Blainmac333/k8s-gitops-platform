@@ -12,9 +12,10 @@ locals {
 resource "cloudflare_record" "tunnel_subdomains" {
   for_each = local.subdomains
 
-  zone_id = var.cloudflare_zone_id
-  name    = each.key
-  content = each.value
-  type    = "CNAME"
-  proxied = true
+  zone_id         = var.cloudflare_zone_id
+  name            = each.key
+  content         = each.value
+  type            = "CNAME"
+  proxied         = true
+  allow_overwrite = true
 }

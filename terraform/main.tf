@@ -8,12 +8,20 @@ terraform {
     }
   }
 
-  cloud {
-    organization = "blainweb"
+  backend "s3" {
+    bucket = "terraform-state-blain"
+    key    = "cloudflare-dns/terraform.tfstate"
+    region = "eu-central-003"
 
-    workspaces {
-      name = "cloudflare-dns"
+    endpoints = {
+      s3 = "https://s3.eu-central-003.backblazeb2.com"
     }
+
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    skip_region_validation      = true
+    skip_requesting_account_id  = true
+    use_path_style              = true
   }
 }
 
