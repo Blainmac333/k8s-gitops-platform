@@ -1,4 +1,4 @@
-﻿tunnel: qr-pi
+tunnel: qr-pi
 credentials-file: /etc/cloudflared/{{CREDENTIALS_JSON}}
 
 ingress:
