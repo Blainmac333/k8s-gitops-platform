@@ -17,6 +17,9 @@ groups:
           severity: critical
         data:
           - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
             datasourceUid: prometheus
             model:
               expr: increase(kube_pod_container_status_restarts_total[15m])
@@ -50,6 +53,9 @@ groups:
           severity: warning
         data:
           - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
             datasourceUid: prometheus
             model:
               expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
@@ -83,6 +89,9 @@ groups:
           severity: warning
         data:
           - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
             datasourceUid: prometheus
             model:
               expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
@@ -116,6 +125,9 @@ groups:
           severity: warning
         data:
           - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
             datasourceUid: prometheus
             model:
               expr: (1 - (node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"} / node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"})) * 100
@@ -149,6 +161,9 @@ groups:
           severity: critical
         data:
           - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
             datasourceUid: prometheus
             model:
               expr: kube_deployment_status_replicas_available{namespace!="kube-system"}
@@ -182,6 +197,9 @@ groups:
           severity: warning
         data:
           - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
             datasourceUid: prometheus
             model:
               expr: time() - velero_backup_last_successful_timestamp
