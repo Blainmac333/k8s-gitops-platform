@@ -6,7 +6,7 @@ contactPoints:
       - uid: discord-webhook
         type: discord
         settings:
-          url: https://discord.com/api/webhooks/1495816161290485953/_2bSiBkgdTt1TUp0MM0BDm1cxdDE8EmeHfVsYqFx4zJxKd2agQnUOcngKO8M9C5Zm39Q
+          url: DISCORD_WEBHOOK_URL_PLACEHOLDER
           message: |
             {{ range .Alerts }}
             **{{ .Labels.alertname }}** — {{ .Status | toUpper }}
