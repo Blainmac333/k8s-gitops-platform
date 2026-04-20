@@ -11,5 +11,5 @@ spec:
   ports:
     - name: http-metrics
       port: 8080
-      targetPort: http-metrics    
+      targetPort: 8080
       nodePort: 30090              
