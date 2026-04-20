@@ -22,16 +22,16 @@ scrape_configs:
   - job_name: 'kube-state-metrics'
     scrape_interval: 30s
     static_configs:
-      - targets: ['192.168.1.106:30090']
+      - targets: ['host.docker.internal:30090']
 
   # cAdvisor on Kubernetes Nodes
   - job_name: 'cadvisor-k8s'
     scrape_interval: 30s
     static_configs:
-      - targets: ['192.168.1.106:31090']
+      - targets: ['host.docker.internal:31090']
 
   # Velero Metrics
   - job_name: 'velero'
     scrape_interval: 30s
     static_configs:
-      - targets: ['192.168.1.106:31085']
+      - targets: ['host.docker.internal:31085']
