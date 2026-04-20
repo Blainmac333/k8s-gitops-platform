@@ -1,13 +1,13 @@
 # 🧠 DevOps QR Code Project
 
 This project is a **fully self-hosted DevOps environment** running entirely on a **Raspberry Pi cluster**.  
-It demonstrates **end-to-end automation** — from code commit to build, deployment, monitoring, and disaster recovery — all managed via **GitHub Actions**, **Argo CD**, **Docker**, and **Kubernetes (k3s)**.
+It demonstrates **end-to-end automation** — from code commit to build, deployment, monitoring, and disaster recovery — all managed via **GitHub Actions**, **Argo CD**, **Docker**, **Kubernetes (k3s)**, and **Terraform**.
 
 ---
 
 ## 🌐 Hosted Services
 
-All services run under the **\*.blainweb.com** domain and are deployed to a self-managed Kubernetes cluster on the Raspberry Pi.
+All services run under the **\*.blainweb.com** domain, routed through a **Cloudflare Tunnel** to the Raspberry Pi.
 
 | Service | Description | Stack |
 |----------|--------------|--------|
@@ -16,6 +16,8 @@ All services run under the **\*.blainweb.com** domain and are deployed to a self
 | **Grafana Dashboards** | Cluster and workload observability with real-time metrics. | Grafana + Prometheus |
 | **Velero Backups** | Automated cluster backups and recovery validation. | Velero + Backblaze B2 |
 | **Argo CD** | GitOps-based continuous delivery that syncs GitHub changes to Kubernetes. | Argo CD + Helm |
+| **Cloudflare Tunnel** | Secure tunnel routing all subdomains to the Pi without exposing ports. | cloudflared |
+| **DNS Management** | DNS records for all subdomains managed as code. | Terraform + Cloudflare |
 
 ---
 
@@ -50,16 +52,20 @@ All sensitive credentials are stored securely in **GitHub Actions Secrets**.
 
 | Secret | Description |
 |---------|-------------|
-| `B2_KEY_ID` | Backblaze B2 Key ID |
-| `B2_APP_KEY` | Backblaze B2 Application Key |
+| `B2_KEY_ID` | Backblaze B2 Key ID (app storage) |
+| `B2_APP_KEY` | Backblaze B2 Application Key (app storage) |
+| `B2_ACCESS_KEY_ID` | Backblaze B2 Key ID (Terraform state bucket) |
+| `B2_SECRET_ACCESS_KEY` | Backblaze B2 Secret (Terraform state bucket) |
 | `S3_BUCKET_NAME` | S3-compatible bucket name |
 | `API_KEY` | Internal API key for FastAPI |
 | `KUBE_CONFIG` | Encoded kubeconfig for Raspberry Pi cluster access |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Optional credentials for AWS S3-compatible services |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token with DNS edit permissions |
+| `CLOUDFLARE_ZONE_ID` | Cloudflare Zone ID for blainweb.com |
 
 Secrets are injected during CI/CD to:  
 - Authenticate with **Backblaze B2**.  
-- Deploy applications to the Pi’s Kubernetes cluster.  
+- Deploy applications to the Pi's Kubernetes cluster.  
+- Manage DNS records via **Terraform + Cloudflare**.  
 - Configure runtime environment variables securely (never exposed in code).
 
 ---
@@ -74,6 +80,7 @@ The **Raspberry Pi** runs a **self-hosted ARM64 GitHub Actions runner full-time*
 |-----------|--------------|
 | **Build & Push** | Builds Docker images for backend and frontend, tags them with the Git commit SHA, and pushes to GHCR. |
 | **Deploy (GitOps)** | Updates Kubernetes manifests with new image tags, commits back to `master`, and Argo CD automatically syncs the cluster. |
+| **Terraform** | Runs `terraform plan` on PRs (posts result as a PR comment) and `terraform apply` on merge to master for any DNS changes. |
 | **Velero Restore Test** | Validates backup and restore integrity using Velero. |
 | **Velero Cleanup** | Deletes old backups/restores weekly to manage storage space efficiently. |
 
@@ -82,7 +89,8 @@ The **Raspberry Pi** runs a **self-hosted ARM64 GitHub Actions runner full-time*
 - 🔁 **Zero-Downtime Rolling Updates** — Kubernetes manages rollout and rollback.  
 - 🔒 **Immutable Builds** — Each build is tied to a unique commit SHA tag.  
 - 🔄 **Self-Healing Cluster** — Argo CD restores drifted resources to match Git.  
-- 💻 **ARM64 Native Builds** — The Pi runner builds and deploys ARM-optimized containers.
+- 💻 **ARM64 Native Builds** — The Pi runner builds and deploys ARM-optimized containers.  
+- 🌍 **IaC DNS** — DNS changes reviewed via PR before being applied to Cloudflare.
 
 ---
 
@@ -95,7 +103,7 @@ Argo CD continuously monitors the Git repository and ensures the live cluster st
 - **Self-Heal:** Detects and reverts manual changes to cluster resources.  
 - **Pruning:** Cleans up old resources automatically.  
 - **Visual Management:** View deployments via the **Argo CD UI** → [argocd.blainweb.com](https://argocd.blainweb.com).  
-- Integrated with **Caddy + Traefik** for HTTPS ingress and Let’s Encrypt certificates.
+- Integrated with **Caddy + Traefik** for HTTPS ingress and Let's Encrypt certificates.
 
 ### Configuration
 
@@ -106,6 +114,22 @@ Argo CD continuously monitors the Git repository and ensures the live cluster st
 | **Sync Policy** | Auto-sync, self-heal, prune |
 | **App Namespace** | `qr` |
 | **Managed Path** | `k8s/` |
+
+---
+
+## 🌐 DNS Management (Terraform + Cloudflare)
+
+DNS records for all subdomains are managed as Infrastructure-as-Code using Terraform, defined in the `terraform/` directory.
+
+- Changes go through a **PR → plan comment → merge → auto-apply** flow
+- State is stored remotely in **Backblaze B2** (`terraform-state-blain` bucket)
+- All subdomains route through the **Cloudflare Tunnel (qr-pi)** via proxied CNAME records
+
+| Subdomain | Type | Target |
+|-----------|------|--------|
+| `qr.blainweb.com` | CNAME | Cloudflare Tunnel |
+| `cv.blainweb.com` | CNAME | Cloudflare Tunnel |
+| `grafana.blainweb.com` | CNAME | Cloudflare Tunnel |
 
 ---
 
@@ -146,6 +170,10 @@ Access via: **[grafana.blainweb.com](https://grafana.blainweb.com)** *(secured a
 ## 🌍 Hosting Architecture
 
 ```plaintext
+[Cloudflare Edge]
+├── Proxied CNAME records managed by Terraform
+└── Tunnel (qr-pi) → cloudflared on Pi → Caddy (port 80)
+
 [Raspberry Pi Cluster]
 ├── k3s / Kubernetes
 │   ├── FastAPI Pod (qr-backend)
@@ -155,8 +183,10 @@ Access via: **[grafana.blainweb.com](https://grafana.blainweb.com)** *(secured a
 │   ├── Argo CD (GitOps controller)
 │   └── Traefik Ingress Controller
 │
+├── Docker (Caddy reverse proxy, Grafana, Prometheus)
 ├── GitHub Actions Runner (Self-Hosted ARM64, always-on)
 └── Persistent Volumes → Backblaze B2 (via Velero)
+```
 
 ---
 
@@ -173,6 +203,8 @@ Access via: **[grafana.blainweb.com](https://grafana.blainweb.com)** *(secured a
 | **Monitoring** | Grafana, Prometheus |
 | **Backups** | Velero |
 | **Reverse Proxy** | Caddy → Traefik |
+| **DNS / Tunneling** | Cloudflare Tunnel, Terraform |
+| **IaC State** | Backblaze B2 |
 | **Hosting** | Raspberry Pi (ARM64, Ubuntu Server) |
 | **Domain** | blainweb.com |
 
@@ -187,7 +219,8 @@ This project demonstrates:
 - 🧠 Self-hosted CI/CD, monitoring, and recovery on ARM hardware.  
 - 🔐 Secure secrets and image management with GitHub + GHCR.  
 - 💾 Real-world disaster recovery using Velero and Backblaze B2.  
-- 📈 Production-grade observability and monitoring.
+- 📈 Production-grade observability and monitoring.  
+- 🌍 Infrastructure-as-Code DNS management via Terraform with full GitOps review flow.
 
 ---
 
@@ -197,4 +230,5 @@ This project demonstrates:
 - Argo CD auto-syncs all new deployments from `master`.  
 - Velero performs daily verified backups to Backblaze B2.  
 - Grafana dashboards actively monitor cluster health.  
-- The GitHub Actions deploy pipeline runs entirely on the **self-hosted ARM64 Pi runner**.
+- The GitHub Actions deploy pipeline runs entirely on the **self-hosted ARM64 Pi runner**.  
+- Terraform manages all DNS records for blainweb.com subdomains, with state stored in Backblaze B2.
