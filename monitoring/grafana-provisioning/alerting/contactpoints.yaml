@@ -1,0 +1,15 @@
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: discord
+    receivers:
+      - uid: discord-webhook
+        type: discord
+        settings:
+          url: DISCORD_WEBHOOK_URL_PLACEHOLDER
+          message: |
+            {{ range .Alerts }}
+            **{{ .Labels.alertname }}** — {{ .Status | toUpper }}
+            {{ if .Annotations.summary }}{{ .Annotations.summary }}{{ end }}
+            {{ if .Annotations.description }}{{ .Annotations.description }}{{ end }}
+            {{ end }}

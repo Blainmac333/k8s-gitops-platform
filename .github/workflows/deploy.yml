@@ -280,6 +280,7 @@ jobs:
           cd ~/apps/devops-qr
           git clean -fd monitoring/grafana-provisioning/datasources
           git clean -fd monitoring/grafana-provisioning/dashboards
+          git clean -fd monitoring/grafana-provisioning/alerting
 
       - name: Guard Grafana datasource provisioning
         run: |
@@ -290,6 +291,13 @@ jobs:
           [ "$CNT_FILES" -eq 1 ] || { echo "Expected exactly one datasource YAML, found $CNT_FILES"; exit 1; }
           CNT_DEF=$(grep -Rsc --include='*.y*ml' '^ *isDefault: *true' . | awk -F: '{s+=$2} END{print s+0}')
           [ "$CNT_DEF" -eq 1 ] || { echo "Expected exactly one isDefault:true, found $CNT_DEF"; exit 1; }
+
+      - name: Write Discord webhook into Grafana contact point
+        run: |
+          set -e
+          cd ~/apps/devops-qr
+          sed -i "s|DISCORD_WEBHOOK_URL_PLACEHOLDER|${{ secrets.DISCORD_WEBHOOK_URL }}|g" \
+            monitoring/grafana-provisioning/alerting/contactpoints.yaml
 
       - name: Write grafana.env from secrets
         run: |
