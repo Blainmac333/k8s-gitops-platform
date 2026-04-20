@@ -12,5 +12,5 @@ variable "cloudflare_zone_id" {
 variable "tunnel_id" {
   description = "Cloudflare Tunnel UUID for qr-pi tunnel"
   type        = string
-  default     = "d9c6665a-3358-4740-8f62-61fcedbedf26"
+  default     = "3900c0d6-5fbd-4b25-b021-182baa1f5976"
 }
