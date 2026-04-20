@@ -226,6 +226,7 @@ groups:
         title: PersistentVolume Almost Full
         condition: C
         for: 5m
+        noDataState: OK
         annotations:
           summary: "PersistentVolume {{ $labels.persistentvolumeclaim }} is almost full"
           description: "Volume {{ $labels.persistentvolumeclaim }} in namespace {{ $labels.namespace }} is {{ $values.B.Value | printf \"%.1f\" }}% full."
@@ -262,6 +263,7 @@ groups:
         title: Pod OOMKilled
         condition: C
         for: 0m
+        noDataState: OK
         annotations:
           summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} was OOMKilled"
           description: "Container {{ $labels.container }} in pod {{ $labels.pod }} was killed due to out-of-memory. Consider increasing memory limits."
