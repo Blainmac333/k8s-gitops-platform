@@ -1,4 +1,4 @@
-# 🧠 DevOps QR Code Project
+# 🧠 k8s-gitops-platform
 
 This project is a **fully self-hosted DevOps environment** running entirely on a **Raspberry Pi cluster**.  
 It demonstrates **end-to-end automation** — from code commit to build, deployment, monitoring, and disaster recovery — all managed via **GitHub Actions**, **Argo CD**, **Docker**, **Kubernetes (k3s)**, and **Terraform**.
