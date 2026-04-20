@@ -221,3 +221,111 @@ groups:
                 - evaluator:
                     type: gt
                     params: [90000]
+
+      - uid: pv-almost-full
+        title: PersistentVolume Almost Full
+        condition: C
+        for: 5m
+        annotations:
+          summary: "PersistentVolume {{ $labels.persistentvolumeclaim }} is almost full"
+          description: "Volume {{ $labels.persistentvolumeclaim }} in namespace {{ $labels.namespace }} is {{ $values.B.Value | printf \"%.1f\" }}% full."
+        labels:
+          severity: warning
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) * 100
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: max
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [85]
+
+      - uid: pod-oom-killed
+        title: Pod OOMKilled
+        condition: C
+        for: 0m
+        annotations:
+          summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} was OOMKilled"
+          description: "Container {{ $labels.container }} in pod {{ $labels.pod }} was killed due to out-of-memory. Consider increasing memory limits."
+        labels:
+          severity: warning
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: max
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+
+      - uid: monitoring-stack-down
+        title: Monitoring Stack Down
+        condition: C
+        for: 2m
+        annotations:
+          summary: "Monitoring stack target is down"
+          description: "A core monitoring target (Prometheus or kube-state-metrics) has been unreachable for 2 minutes — alerts may not be firing."
+        labels:
+          severity: critical
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: up{job=~"prometheus|kube-state-metrics"}
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: min
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
