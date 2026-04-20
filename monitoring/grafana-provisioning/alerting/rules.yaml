@@ -1,0 +1,205 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: kubernetes
+    folder: Alerts
+    interval: 1m
+    rules:
+
+      - uid: pod-crash-looping
+        title: Pod Crash Looping
+        condition: C
+        for: 5m
+        annotations:
+          summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash-looping"
+          description: "Container {{ $labels.container }} has restarted {{ $values.B.Value | printf \"%.0f\" }} times in the last 15 minutes."
+        labels:
+          severity: critical
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: increase(kube_pod_container_status_restarts_total[15m])
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: max
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [3]
+
+      - uid: node-cpu-high
+        title: Node CPU High
+        condition: C
+        for: 5m
+        annotations:
+          summary: "Node CPU usage is above 80%"
+          description: "Node CPU has been above 80% for more than 5 minutes (current: {{ $values.B.Value | printf \"%.1f\" }}%)."
+        labels:
+          severity: warning
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [80]
+
+      - uid: node-memory-high
+        title: Node Memory High
+        condition: C
+        for: 5m
+        annotations:
+          summary: "Node memory usage is above 85%"
+          description: "Node memory has been above 85% for more than 5 minutes (current: {{ $values.B.Value | printf \"%.1f\" }}%)."
+        labels:
+          severity: warning
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [85]
+
+      - uid: node-disk-high
+        title: Node Disk Usage High
+        condition: C
+        for: 5m
+        annotations:
+          summary: "Node disk usage is above 80%"
+          description: "Disk usage on {{ $labels.mountpoint }} has been above 80% for more than 5 minutes (current: {{ $values.B.Value | printf \"%.1f\" }}%)."
+        labels:
+          severity: warning
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: (1 - (node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"} / node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"})) * 100
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [80]
+
+      - uid: pod-not-ready
+        title: Deployment Has No Ready Pods
+        condition: C
+        for: 5m
+        annotations:
+          summary: "Deployment {{ $labels.namespace }}/{{ $labels.deployment }} has no ready pods"
+          description: "Deployment has had 0 available replicas for more than 5 minutes."
+        labels:
+          severity: critical
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: kube_deployment_status_replicas_available{namespace!="kube-system"}
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+
+      - uid: velero-backup-stale
+        title: Velero Backup Not Completing
+        condition: C
+        for: 0m
+        annotations:
+          summary: "Velero backup has not succeeded in over 25 hours"
+          description: "Last successful Velero backup was more than 25 hours ago. Check backup storage and Velero logs."
+        labels:
+          severity: warning
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            model:
+              expr: time() - velero_backup_last_successful_timestamp
+              instant: false
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [90000]

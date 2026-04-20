@@ -280,6 +280,7 @@ jobs:
           cd ~/apps/devops-qr
           git clean -fd monitoring/grafana-provisioning/datasources
           git clean -fd monitoring/grafana-provisioning/dashboards
+          git clean -fd monitoring/grafana-provisioning/alerting
 
       - name: Guard Grafana datasource provisioning
         run: |
