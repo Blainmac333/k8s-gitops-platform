@@ -142,8 +142,8 @@
       "fieldConfig": { "defaults": { "unit": "Bps" } },
       "options": { "legend": { "showLegend": true, "placement": "bottom" } },
       "targets": [
-        { "expr": "sum by (device) (rate(node_disk_read_bytes_total{device=~\"sd.*|mmcblk.*\"}[5m]))", "legendFormat": "{{device}} read" },
-        { "expr": "sum by (device) (rate(node_disk_written_bytes_total{device=~\"sd.*|mmcblk.*\"}[5m]))", "legendFormat": "{{device}} write" }
+        { "expr": "sum by (device) (rate(node_disk_read_bytes_total{device=~\"sd.*|mmcblk.*|nvme.*\"}[5m]))", "legendFormat": "{{device}} read" },
+        { "expr": "sum by (device) (rate(node_disk_written_bytes_total{device=~\"sd.*|mmcblk.*|nvme.*\"}[5m]))", "legendFormat": "{{device}} write" }
       ],
       "datasource": { "type": "prometheus", "uid": "prometheus" }
     },
