@@ -29,6 +29,15 @@ scrape_configs:
     scrape_interval: 30s
     static_configs:
       - targets: ['host.docker.internal:31090']
+        labels:
+          node: 'raspberrypi'
+    metric_relabel_configs:
+      - source_labels: [container_label_io_kubernetes_container_name]
+        target_label: container
+      - source_labels: [container_label_io_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [container_label_io_kubernetes_pod_namespace]
+        target_label: namespace
 
   # Velero Metrics
   - job_name: 'velero'
