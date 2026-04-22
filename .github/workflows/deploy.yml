@@ -361,8 +361,9 @@ jobs:
 
           PROM=$(docker ps --format '{{.Names}}' | grep -i prometheus | head -n1)
 
-          echo "→ Reload Prometheus config"
-          docker exec "$PROM" wget -qO- --post-data="" http://localhost:9090/-/reload >/dev/null 2>&1 || true
+          echo "→ Restart Prometheus to pick up new config (hot-reload fails after git replaces file inode)"
+          docker restart "$PROM"
+          sleep 10
 
           echo "---- container prometheus.yml grep ----"
           docker exec "$PROM" sh -lc "grep -En \"job_name:[[:space:]]*['\\\"]?velero['\\\"]?\" /etc/prometheus/prometheus.yml || echo '❌ velero job not found inside container'"
