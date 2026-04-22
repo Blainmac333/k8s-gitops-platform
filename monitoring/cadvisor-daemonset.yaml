@@ -25,10 +25,10 @@ spec:
           resources:
             requests:
               cpu: "50m"
-              memory: "64Mi"
+              memory: "128Mi"
             limits:
               cpu: "250m"
-              memory: "200Mi"
+              memory: "350Mi"
           args:
             - --housekeeping_interval=10s
             # IMPORTANT: k3s containerd socket:
