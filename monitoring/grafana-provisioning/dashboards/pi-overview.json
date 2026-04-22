@@ -210,7 +210,7 @@
       ],
       "targets": [
         {
-          "expr": "sum by (pod, container) (increase(kube_pod_container_status_restarts_total{namespace=\"qr\"}[$__range]))",
+          "expr": "sum by (pod, container) (increase(kube_pod_container_status_restarts_total{namespace=\"qr\"}[$__range])) or vector(0)",
           "legendFormat": "{{pod}}/{{container}}"
         }
       ],
@@ -223,7 +223,7 @@
       "fieldConfig": { "defaults": { "unit": "none" } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
-        { "expr": "increase(velero_backup_attempt_total[$__range])", "legendFormat": "attempts" }
+        { "expr": "increase(velero_backup_attempt_total[$__range]) or vector(0)", "legendFormat": "attempts" }
       ],
       "datasource": { "type": "prometheus", "uid": "prometheus" }
     }
