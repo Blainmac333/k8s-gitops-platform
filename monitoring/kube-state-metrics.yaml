@@ -12,6 +12,14 @@ spec:
     selfMonitor:
       enabled: false
 
+    resources:
+      requests:
+        cpu: "10m"
+        memory: "32Mi"
+      limits:
+        cpu: "100m"
+        memory: "96Mi"
+
     service:
       annotations:
         prometheus.io/scrape: "true"
