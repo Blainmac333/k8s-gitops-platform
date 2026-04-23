@@ -189,7 +189,8 @@ groups:
       - uid: velero-backup-stale
         title: Velero Backup Not Completing
         condition: C
-        for: 0m
+        for: 5m
+        noDataState: Alerting
         annotations:
           summary: "Velero backup has not succeeded in over 25 hours"
           description: "Last successful Velero backup was more than 25 hours ago. Check backup storage and Velero logs."
@@ -202,7 +203,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: time() - velero_backup_last_successful_timestamp
+              expr: time() - velero_backup_last_successful_timestamp{schedule="daily-backup"}
               instant: false
               intervalMs: 1000
               maxDataPoints: 43200
