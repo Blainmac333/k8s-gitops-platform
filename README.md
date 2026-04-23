@@ -13,7 +13,7 @@ All services run under the **\*.blainweb.com** domain, routed through a **Cloudf
 |----------|--------------|--------|
 | **QR Code App** | Users submit URLs to generate QR codes stored in S3-compatible cloud storage. | Frontend: Next.js / Backend: FastAPI |
 | **CV / Portfolio Website** | Personal website showcasing projects and experience. | React / Static Hosting |
-| **Grafana Dashboards** | Cluster and workload observability with real-time metrics. | Grafana + Prometheus |
+| **Grafana Dashboards** | Cluster and workload observability with real-time metrics and alerting. | Grafana + Prometheus |
 | **Velero Backups** | Automated cluster backups and recovery validation. | Velero + Backblaze B2 |
 | **Argo CD** | GitOps-based continuous delivery that syncs GitHub changes to Kubernetes. | Argo CD + Helm |
 | **Cloudflare Tunnel** | Secure tunnel routing all subdomains to the Pi without exposing ports. | cloudflared |
@@ -76,13 +76,13 @@ The **Raspberry Pi** runs a **self-hosted ARM64 GitHub Actions runner full-time*
 
 ### Workflow Overview
 
-| Workflow | Description |
-|-----------|--------------|
-| **Build & Push** | Builds Docker images for backend and frontend, tags them with the Git commit SHA, and pushes to GHCR. |
-| **Deploy (GitOps)** | Updates Kubernetes manifests with new image tags, commits back to `master`, and Argo CD automatically syncs the cluster. |
-| **Terraform** | Runs `terraform plan` on PRs (posts result as a PR comment) and `terraform apply` on merge to master for any DNS changes. |
-| **Velero Restore Test** | Validates backup and restore integrity using Velero. |
-| **Velero Cleanup** | Deletes old backups/restores weekly to manage storage space efficiently. |
+| Workflow | Trigger | Description |
+|-----------|---------|--------------|
+| **Build & Push** | Push to `master` | Builds Docker images for backend and frontend, tags them with the Git commit SHA, and pushes to GHCR. |
+| **Deploy (GitOps)** | After Build & Push | Updates Kubernetes manifests with new image tags, commits back to `master`, and Argo CD automatically syncs the cluster. |
+| **Terraform** | PR / merge to `master` | Runs `terraform plan` on PRs (posts result as a PR comment) and `terraform apply` on merge for any DNS changes. |
+| **Velero Restore Test** | Mondays 02:30 UTC | Creates a test backup of a temporary namespace, verifies full restore integrity, then prunes old test backups (keeps 5). |
+| **Velero Cleanup** | Sundays 03:10 UTC | Deletes old test backups to manage storage space efficiently. |
 
 ### Key Features
 - ✅ **Full GitOps Deployment Flow** — Argo CD auto-syncs and self-heals the cluster from Git changes.  
@@ -137,33 +137,66 @@ DNS records for all subdomains are managed as Infrastructure-as-Code using Terra
 
 Velero automatically backs up all cluster resources and persistent volumes to **Backblaze B2**.
 
-### Configuration
+### Production Backup Configuration
 
 | Setting | Value |
 |----------|--------|
 | **Provider** | `aws` (S3-compatible) |
 | **Bucket** | `velero-blain-backups` |
 | **Endpoint** | `https://s3.eu-central-003.backblazeb2.com` |
-| **Schedule** | Daily at 03:00 UTC |
-| **Retention** | 5 most recent test backups |
+| **Schedule** | Daily at 03:00 UTC (`infra/velero/schedule-daily.yaml`) |
+| **Namespaces** | `qr`, `kube-system` |
+| **Retention (TTL)** | 168 hours (7 days) |
 
 ### Validation & Cleanup
-- **Restore Test:** `scripts/velero-restore-test.sh` validates backup/restore.  
-- **Cleanup:** `scripts/velero-cleanup.sh` removes outdated backups weekly.  
-- **Fail-Soft Mode:** If Backblaze rate limits occur, the pipeline skips backup but continues deployment.
+- **Restore Test** (Mondays 02:30 UTC): `scripts/velero-restore-test.sh` creates a fresh backup of a throwaway namespace, performs a full restore, and verifies data integrity. This is independent of the production daily backup.
+- **Cleanup** (Sundays 03:10 UTC): `scripts/velero-cleanup.sh` removes old test backups, retaining the 5 most recent.
+- **Fail-Soft Mode:** If Backblaze rate limits are hit, the restore test skips gracefully without failing the pipeline.
+
+### Metrics
+Velero exposes metrics on port `8085`, scraped by Prometheus via NodePort `31085`. The metrics service selector targets only the Velero server pod (`name: velero`) to avoid routing to the node-agent, which does not expose backup metrics.
 
 ---
 
 ## 📊 Monitoring & Observability
 
-- **Grafana** provides dashboards for system and app metrics.  
-- **Prometheus** scrapes metrics from all nodes and containers.  
-- Dashboards include:
-  - CPU, memory, and disk usage  
-  - Pod health and uptime  
-  - Velero backup status  
+**Grafana** provides dashboards and alerting for system and application metrics. **Prometheus** scrapes from all cluster components via NodePort services and Docker targets.
+
+### Dashboards
+- CPU, memory, and disk usage  
+- Pod health and container uptime  
+- Velero backup status and last successful timestamp  
 
 Access via: **[grafana.blainweb.com](https://grafana.blainweb.com)** *(secured access only)*
+
+### Prometheus Scrape Targets
+
+| Job | Target | Description |
+|-----|--------|-------------|
+| `prometheus` | `prometheus:9090` | Prometheus self-metrics |
+| `node-exporter` | `node-exporter:9100` | Pi host CPU, memory, disk |
+| `cadvisor` | `cadvisor:8080` | Docker container metrics |
+| `kube-state-metrics` | `host.docker.internal:30090` | Kubernetes object state |
+| `cadvisor-k8s` | `host.docker.internal:31090` | Kubernetes pod/container metrics |
+| `velero` | `host.docker.internal:31085` | Velero backup metrics |
+
+### Grafana Alert Rules
+
+Alert rules are provisioned from `monitoring/grafana-provisioning/alerting/rules.yaml` and evaluated every minute.
+
+| Alert | Condition | Severity |
+|-------|-----------|----------|
+| **Pod Crash Looping** | Container restarts > 3 in 15 minutes | Critical |
+| **Node CPU High** | CPU usage > 80% for 5 minutes | Warning |
+| **Node Memory High** | Memory usage > 85% for 5 minutes | Warning |
+| **Node Disk Usage High** | Disk usage > 80% for 5 minutes | Warning |
+| **Deployment Has No Ready Pods** | Available replicas < 1 for 5 minutes | Critical |
+| **Velero Backup Not Completing** | `daily-backup` schedule not succeeded in 25+ hours | Warning |
+| **PersistentVolume Almost Full** | PV usage > 85% for 5 minutes | Warning |
+| **Pod OOMKilled** | Container terminated with OOMKilled reason | Warning |
+| **Monitoring Stack Down** | Prometheus or kube-state-metrics unreachable for 2 minutes | Critical |
+
+Alerts are delivered via **Discord** webhook. The Velero alert targets only the `schedule="daily-backup"` production metric and has a 5-minute grace period to avoid false positives from transient scrape gaps.
 
 ---
 
@@ -178,13 +211,16 @@ Access via: **[grafana.blainweb.com](https://grafana.blainweb.com)** *(secured a
 ├── k3s / Kubernetes
 │   ├── FastAPI Pod (qr-backend)
 │   ├── Next.js Pod (qr-frontend)
-│   ├── Velero + Node Agent
-│   ├── Grafana + Prometheus Stack
+│   ├── Velero Server + Node Agent
 │   ├── Argo CD (GitOps controller)
 │   └── Traefik Ingress Controller
 │
-├── Docker (Caddy reverse proxy, Grafana, Prometheus)
-├── GitHub Actions Runner (Self-Hosted ARM64, always-on)
+├── Docker
+│   ├── Caddy (reverse proxy)
+│   ├── Grafana + Prometheus (monitoring stack)
+│   ├── cAdvisor + Node Exporter (metrics collectors)
+│   └── GitHub Actions Runner (Self-Hosted ARM64, always-on)
+│
 └── Persistent Volumes → Backblaze B2 (via Velero)
 ```
 
@@ -201,6 +237,7 @@ Access via: **[grafana.blainweb.com](https://grafana.blainweb.com)** *(secured a
 | **Continuous Delivery** | Argo CD (GitOps) |
 | **CI/CD** | GitHub Actions (Self-Hosted ARM64 Runner) |
 | **Monitoring** | Grafana, Prometheus |
+| **Alerting** | Grafana Alerting → Discord |
 | **Backups** | Velero |
 | **Reverse Proxy** | Caddy → Traefik |
 | **DNS / Tunneling** | Cloudflare Tunnel, Terraform |
@@ -219,7 +256,7 @@ This project demonstrates:
 - 🧠 Self-hosted CI/CD, monitoring, and recovery on ARM hardware.  
 - 🔐 Secure secrets and image management with GitHub + GHCR.  
 - 💾 Real-world disaster recovery using Velero and Backblaze B2.  
-- 📈 Production-grade observability and monitoring.  
+- 📈 Production-grade observability, alerting, and monitoring.  
 - 🌍 Infrastructure-as-Code DNS management via Terraform with full GitOps review flow.
 
 ---
@@ -228,7 +265,7 @@ This project demonstrates:
 
 - All services (Frontend, Backend, Grafana, Argo CD, Velero) are live and healthy.  
 - Argo CD auto-syncs all new deployments from `master`.  
-- Velero performs daily verified backups to Backblaze B2.  
-- Grafana dashboards actively monitor cluster health.  
+- Velero performs daily verified backups to Backblaze B2 with 7-day retention.  
+- Grafana dashboards actively monitor cluster health with Discord alerting for 9 alert conditions.  
 - The GitHub Actions deploy pipeline runs entirely on the **self-hosted ARM64 Pi runner**.  
 - Terraform manages all DNS records for blainweb.com subdomains, with state stored in Backblaze B2.
