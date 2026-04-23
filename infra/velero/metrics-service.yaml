@@ -6,7 +6,7 @@ metadata:
   namespace: velero
 spec:
   selector:
-    app.kubernetes.io/name: velero
+    name: velero
   ports:
     - name: http-metrics
       port: 8085
@@ -20,7 +20,7 @@ metadata:
 spec:
   type: NodePort
   selector:
-    app.kubernetes.io/name: velero
+    name: velero
   ports:
     - name: http-metrics
       port: 8085
