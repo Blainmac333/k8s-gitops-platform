@@ -1,6 +1,9 @@
 # Start with an official Python image
 FROM python:3.9-slim
 
+# Patch OS packages to eliminate fixable CVEs flagged by image scanners
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 # Set the working directory
 WORKDIR /app
 
