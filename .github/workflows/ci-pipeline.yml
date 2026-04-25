@@ -76,7 +76,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Upload API scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always() && steps.scan-api.outcome != 'skipped'
         with:
           sarif_file: 'trivy-api.sarif'
@@ -118,7 +118,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Upload Frontend scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always() && steps.scan-frontend.outcome != 'skipped'
         with:
           sarif_file: 'trivy-frontend.sarif'
