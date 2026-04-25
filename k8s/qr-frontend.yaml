@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: qr-frontend
-          image: ghcr.io/blainmac333/qr-frontend:d41c6cb36d20108410628d63bb72c49c6a02fded
+          image: ghcr.io/blainmac333/qr-frontend:cf133dc8437eb2085dcaec1c3bd2d5afda4f41ba
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
