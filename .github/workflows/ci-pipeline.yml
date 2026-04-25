@@ -87,6 +87,7 @@ jobs:
 
       # --- Frontend image: build → scan → push ---
       - name: Build Frontend Docker image
+        id: build-frontend
         uses: docker/build-push-action@v7
         with:
           context: ./front-end-nextjs
@@ -107,7 +108,7 @@ jobs:
       - name: Scan Frontend image - report to Security tab
         id: scan-frontend
         uses: aquasecurity/trivy-action@v0.36.0
-        if: always()
+        if: always() && steps.build-frontend.result == 'success'
         with:
           image-ref: '${{ secrets.DOCKER_USERNAME }}/qr-code-frontend:${{ github.sha }}'
           format: 'sarif'
