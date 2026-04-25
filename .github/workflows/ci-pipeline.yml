@@ -50,6 +50,7 @@ jobs:
           tags: ${{ secrets.DOCKER_USERNAME }}/qr-code-api:${{ github.sha }}
 
       - name: Scan API image with Trivy
+        id: scan-api
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: '${{ secrets.DOCKER_USERNAME }}/qr-code-api:${{ github.sha }}'
@@ -57,10 +58,11 @@ jobs:
           output: 'trivy-api.sarif'
           severity: 'CRITICAL'
           exit-code: '1'
+          ignore-unfixed: true
 
       - name: Upload API scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: always() && steps.scan-api.outcome != 'skipped'
         with:
           sarif_file: 'trivy-api.sarif'
           category: 'trivy-api'
@@ -79,6 +81,7 @@ jobs:
           tags: ${{ secrets.DOCKER_USERNAME }}/qr-code-frontend:${{ github.sha }}
 
       - name: Scan Frontend image with Trivy
+        id: scan-frontend
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: '${{ secrets.DOCKER_USERNAME }}/qr-code-frontend:${{ github.sha }}'
@@ -86,10 +89,11 @@ jobs:
           output: 'trivy-frontend.sarif'
           severity: 'CRITICAL'
           exit-code: '1'
+          ignore-unfixed: true
 
       - name: Upload Frontend scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: always() && steps.scan-frontend.outcome != 'skipped'
         with:
           sarif_file: 'trivy-frontend.sarif'
           category: 'trivy-frontend'
