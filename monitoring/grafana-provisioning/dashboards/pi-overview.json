@@ -12,7 +12,21 @@
       "type": "gauge",
       "title": "CPU Usage %",
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "red", "value": 85 }
+            ]
+          }
+        }
+      },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false } },
       "targets": [
         { "expr": "100 - avg(irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100", "legendFormat": "CPU" }
@@ -23,7 +37,21 @@
       "type": "gauge",
       "title": "Memory Used %",
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 75 },
+              { "color": "red", "value": 85 }
+            ]
+          }
+        }
+      },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false } },
       "targets": [
         { "expr": "(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100", "legendFormat": "Mem" }
@@ -34,7 +62,21 @@
       "type": "gauge",
       "title": "Root Disk Used %",
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 75 },
+              { "color": "red", "value": 85 }
+            ]
+          }
+        }
+      },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false } },
       "targets": [
         {
@@ -47,8 +89,38 @@
 
     {
       "type": "timeseries",
-      "title": "Network RX/TX (bytes/sec)",
+      "title": "CPU & Memory Over Time",
+      "description": "Trend view — use this to spot gradual memory growth (leaks) or CPU spikes over the selected window.",
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "options": {
+        "legend": { "showLegend": true, "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "expr": "100 - avg(irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100",
+          "legendFormat": "CPU %"
+        },
+        {
+          "expr": "(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100",
+          "legendFormat": "Memory %"
+        }
+      ],
+      "datasource": { "type": "prometheus", "uid": "prometheus" }
+    },
+
+    {
+      "type": "timeseries",
+      "title": "Network RX/TX (bytes/sec)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
       "fieldConfig": { "defaults": { "unit": "Bps" } },
       "options": { "legend": { "showLegend": true, "placement": "bottom" } },
       "targets": [
@@ -60,21 +132,52 @@
 
     {
       "type": "bargauge",
-      "title": "Top 5 Containers by CPU %",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-      "fieldConfig": { "defaults": { "unit": "percent", "min": 0 } },
-      "options": { "displayMode": "basic" },
+      "title": "Top 5 Containers by CPU (millicores)",
+      "description": "1000m = 1 full CPU core. Pi 4 has 4 cores (4000m total).",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "displayName": "${__field.labels.name}",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 500 },
+              { "color": "red", "value": 1000 }
+            ]
+          }
+        }
+      },
+      "options": { "displayMode": "gradient", "orientation": "horizontal" },
       "targets": [
-        { "expr": "topk(5, 100 * sum(rate(container_cpu_usage_seconds_total{image!=\"\"}[5m])) by (name))", "legendFormat": "{{name}}" }
+        {
+          "expr": "topk(5, 1000 * sum(rate(container_cpu_usage_seconds_total{image!=\"\"}[5m])) by (name))",
+          "legendFormat": "{{name}}"
+        }
       ],
       "datasource": { "type": "prometheus", "uid": "prometheus" }
     },
     {
       "type": "bargauge",
       "title": "Top 5 Containers by Memory",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-      "fieldConfig": { "defaults": { "unit": "bytes", "min": 0 } },
-      "options": { "displayMode": "basic" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 268435456 },
+              { "color": "red", "value": 536870912 }
+            ]
+          }
+        }
+      },
+      "options": { "displayMode": "gradient", "orientation": "horizontal" },
       "targets": [
         { "expr": "topk(5, sum(container_memory_working_set_bytes{image!=\"\"}) by (name))", "legendFormat": "{{name}}" }
       ],
@@ -84,7 +187,7 @@
     {
       "type": "stat",
       "title": "Targets Up",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 24 },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 32 },
       "fieldConfig": { "defaults": { "unit": "none" } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [ { "expr": "sum(up)", "legendFormat": "up" } ],
@@ -92,9 +195,9 @@
     },
     {
       "type": "stat",
-      "title": "Uptime (seconds)",
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 24 },
-      "fieldConfig": { "defaults": { "unit": "s" } },
+      "title": "Uptime",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 32 },
+      "fieldConfig": { "defaults": { "unit": "dtdurations" } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [ { "expr": "time() - node_boot_time_seconds", "legendFormat": "uptime" } ],
       "datasource": { "type": "prometheus", "uid": "prometheus" }
@@ -102,7 +205,7 @@
     {
       "type": "stat",
       "title": "Prometheus Samples/s",
-      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 24 },
+      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 32 },
       "fieldConfig": { "defaults": { "unit": "ops" } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
@@ -114,7 +217,7 @@
     {
       "type": "timeseries",
       "title": "System Load (1/5/15m)",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
       "fieldConfig": { "defaults": { "unit": "short" } },
       "options": { "legend": { "showLegend": true, "placement": "bottom" } },
       "targets": [
@@ -127,8 +230,21 @@
     {
       "type": "gauge",
       "title": "CPU Temperature (°C)",
-      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 28 },
-      "fieldConfig": { "defaults": { "unit": "celsius", "min": 0 } },
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 36 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 65 },
+              { "color": "red", "value": 75 }
+            ]
+          }
+        }
+      },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "values": false } },
       "targets": [
         { "expr": "max(node_hwmon_temp_celsius) or max(node_thermal_zone_temp)", "legendFormat": "temp" }
@@ -138,7 +254,7 @@
     {
       "type": "timeseries",
       "title": "Disk I/O (bytes/sec)",
-      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 28 },
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 36 },
       "fieldConfig": { "defaults": { "unit": "Bps" } },
       "options": { "legend": { "showLegend": true, "placement": "bottom" } },
       "targets": [
@@ -151,7 +267,7 @@
     {
       "type": "bargauge",
       "title": "Top 5 Containers by FS Usage",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
       "fieldConfig": { "defaults": { "unit": "bytes", "min": 0 } },
       "options": { "displayMode": "basic" },
       "targets": [
@@ -162,7 +278,7 @@
     {
       "type": "timeseries",
       "title": "Network Errors (rx/tx)",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
       "fieldConfig": { "defaults": { "unit": "ops" } },
       "options": { "legend": { "showLegend": true, "placement": "bottom" } },
       "targets": [
@@ -174,7 +290,7 @@
     {
       "type": "timeseries",
       "title": "Container Memory (MB) – namespace=qr",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 44 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 52 },
       "fieldConfig": { "defaults": { "unit": "megabytes", "min": 0 } },
       "options": { "legend": { "showLegend": true, "placement": "bottom" }, "tooltip": { "mode": "multi" } },
       "targets": [
@@ -188,7 +304,7 @@
     {
       "type": "bargauge",
       "title": "Top Memory Growers (Δ working_set over time range) – namespace=qr",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 52 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 60 },
       "fieldConfig": { "defaults": { "unit": "megabytes", "min": 0 } },
       "options": { "displayMode": "gradient" },
       "targets": [
@@ -202,7 +318,7 @@
     {
       "type": "table",
       "title": "Container Restarts (in range) – namespace=qr",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 60 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 68 },
       "fieldConfig": { "defaults": { "unit": "none" } },
       "options": { "showHeader": true },
       "transformations": [
@@ -219,7 +335,7 @@
     {
       "type": "stat",
       "title": "Velero backup attempts (in range)",
-      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 64 },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 76 },
       "fieldConfig": { "defaults": { "unit": "none" } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
