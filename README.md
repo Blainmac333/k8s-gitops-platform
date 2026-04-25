@@ -42,7 +42,8 @@ All services run under the **\*.blainweb.com** domain, routed through a **Cloudf
 - Images are built via **GitHub Actions** on every push to `master`.  
 - Versioned images are pushed to **GitHub Container Registry (GHCR)**.  
 - Deployments are managed by **Argo CD** via Kubernetes manifests.  
-- Each deployment uses `revisionHistoryLimit: 2` to retain only two previous rollouts for clean rollback capability.
+- Each deployment uses `revisionHistoryLimit: 2` to retain only two previous rollouts for clean rollback capability.  
+- Both deployments include **liveness and readiness probes** — Kubernetes only routes traffic to healthy pods and restarts unresponsive ones automatically.
 
 ---
 
@@ -78,7 +79,7 @@ The **Raspberry Pi** runs a **self-hosted ARM64 GitHub Actions runner full-time*
 
 | Workflow | Trigger | Description |
 |-----------|---------|--------------|
-| **Build & Push** | Push to `master` | Builds Docker images for backend and frontend, tags them with the Git commit SHA, and pushes to GHCR. |
+| **Build & Push** | Push to `master` | Builds Docker images for backend and frontend, scans them with Trivy, tags them with the Git commit SHA, and pushes to GHCR. |
 | **Deploy (GitOps)** | After Build & Push | Updates Kubernetes manifests with new image tags, commits back to `master`, and Argo CD automatically syncs the cluster. |
 | **Terraform** | PR / merge to `master` | Runs `terraform plan` on PRs (posts result as a PR comment) and `terraform apply` on merge for any DNS changes. |
 | **Velero Restore Test** | Mondays 02:30 UTC | Creates a test backup of a temporary namespace, verifies full restore integrity, then prunes old test backups (keeps 5). |
@@ -90,7 +91,8 @@ The **Raspberry Pi** runs a **self-hosted ARM64 GitHub Actions runner full-time*
 - 🔒 **Immutable Builds** — Each build is tied to a unique commit SHA tag.  
 - 🔄 **Self-Healing Cluster** — Argo CD restores drifted resources to match Git.  
 - 💻 **ARM64 Native Builds** — The Pi runner builds and deploys ARM-optimized containers.  
-- 🌍 **IaC DNS** — DNS changes reviewed via PR before being applied to Cloudflare.
+- 🌍 **IaC DNS** — DNS changes reviewed via PR before being applied to Cloudflare.  
+- 🛡️ **Container Security Scanning** — Trivy scans every image for fixable CRITICAL CVEs before push; the build is blocked if any are found. CRITICAL/HIGH findings are also uploaded to the GitHub Security tab as SARIF reports.
 
 ---
 
@@ -268,4 +270,6 @@ This project demonstrates:
 - Velero performs daily verified backups to Backblaze B2 with 7-day retention.  
 - Grafana dashboards actively monitor cluster health with Discord alerting for 9 alert conditions.  
 - The GitHub Actions deploy pipeline runs entirely on the **self-hosted ARM64 Pi runner**.  
-- Terraform manages all DNS records for blainweb.com subdomains, with state stored in Backblaze B2.
+- Terraform manages all DNS records for blainweb.com subdomains, with state stored in Backblaze B2.  
+- Trivy scans every image build for fixable CRITICAL CVEs — results visible in the GitHub Security tab.  
+- Liveness and readiness probes active on all deployments; Kubernetes auto-restarts unhealthy pods and withholds traffic until they pass.
