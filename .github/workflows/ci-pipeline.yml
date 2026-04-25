@@ -8,6 +8,9 @@ on:
     branches-ignore:
       - master
 
+permissions:
+  security-events: write
+
 jobs:
   build-and-push:
     runs-on: ubuntu-22.04
@@ -36,18 +39,60 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push API Docker image
+      # --- API image: build → scan → push ---
+      - name: Build API Docker image
         uses: docker/build-push-action@v7
         with:
           context: ./api
           file: ./api/Dockerfile
-          push: true
+          push: false
+          load: true
           tags: ${{ secrets.DOCKER_USERNAME }}/qr-code-api:${{ github.sha }}
 
-      - name: Build and push Frontend Docker image
+      - name: Scan API image with Trivy
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref: '${{ secrets.DOCKER_USERNAME }}/qr-code-api:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-api.sarif'
+          severity: 'CRITICAL'
+          exit-code: '1'
+
+      - name: Upload API scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-api.sarif'
+          category: 'trivy-api'
+
+      - name: Push API Docker image
+        run: docker push ${{ secrets.DOCKER_USERNAME }}/qr-code-api:${{ github.sha }}
+
+      # --- Frontend image: build → scan → push ---
+      - name: Build Frontend Docker image
         uses: docker/build-push-action@v7
         with:
           context: ./front-end-nextjs
           file: ./front-end-nextjs/Dockerfile
-          push: true
+          push: false
+          load: true
           tags: ${{ secrets.DOCKER_USERNAME }}/qr-code-frontend:${{ github.sha }}
+
+      - name: Scan Frontend image with Trivy
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref: '${{ secrets.DOCKER_USERNAME }}/qr-code-frontend:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-frontend.sarif'
+          severity: 'CRITICAL'
+          exit-code: '1'
+
+      - name: Upload Frontend scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-frontend.sarif'
+          category: 'trivy-frontend'
+
+      - name: Push Frontend Docker image
+        run: docker push ${{ secrets.DOCKER_USERNAME }}/qr-code-frontend:${{ github.sha }}
