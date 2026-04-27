@@ -41,6 +41,7 @@ jobs:
 
       # --- API image: build → scan → push ---
       - name: Build API Docker image
+        id: build-api
         uses: docker/build-push-action@v7
         with:
           context: ./api
@@ -66,7 +67,7 @@ jobs:
       - name: Scan API image - report to Security tab
         id: scan-api
         uses: aquasecurity/trivy-action@v0.36.0
-        if: always()
+        if: always() && steps.build-api.result == 'success'
         with:
           image-ref: '${{ secrets.DOCKER_USERNAME }}/qr-code-api:${{ github.sha }}'
           format: 'sarif'
