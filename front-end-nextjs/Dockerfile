@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Patch Alpine OS packages to clear fixable CVEs (OpenSSL libcrypto3/libssl3)
 RUN apk update && apk upgrade && rm -rf /var/cache/apk/*
