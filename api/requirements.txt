@@ -1,4 +1,4 @@
-boto3>=1.35.93
+boto3>=1.35.99
 fastapi>=0.115.0
 pillow>=10.2.0
 pydantic>=2.5.3
