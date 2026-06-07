@@ -6,12 +6,14 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-
+    auto-merge: true
+      
   # Python backend
   - package-ecosystem: "pip"
     directory: "/api"
     schedule:
       interval: "weekly"
+    auto-merge: true
     ignore:
       - dependency-name: "pydantic"
         update-types: ["version-update:semver-minor", "version-update:semver-major"]
