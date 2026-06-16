@@ -42,6 +42,9 @@ spec:
         - --insecure
 
     configs:
+      secret:
+        argoAdminPassword: "$2a$10$SBfMsHLNi8UREpxK7lFAsOjVEIljLelSMGddOqVMNMnKEmlvNYBS2"
+        argoAdminPasswordMtime: "2026-06-16T00:00:00Z"
       params:
         server.insecure: "true"
       cm:
