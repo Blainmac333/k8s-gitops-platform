@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:20-bookworm-slim
 
 # Patch Alpine OS packages to clear fixable CVEs (OpenSSL libcrypto3/libssl3)
 RUN apk update && apk upgrade && rm -rf /var/cache/apk/*
