@@ -285,7 +285,7 @@ jobs:
           cd ~/apps/devops-qr
           mkdir -p monitoring/secrets
           printf '%s' "${{ secrets.GRAFANA_CLOUD_REMOTE_WRITE_TOKEN }}" > monitoring/secrets/grafana-cloud-password
-          chmod 600 monitoring/secrets/grafana-cloud-password
+          chmod 644 monitoring/secrets/grafana-cloud-password
 
       - name: Pull and restart stack on Pi (Docker services like Grafana)
         run: |
