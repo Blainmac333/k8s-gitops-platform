@@ -27,6 +27,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/secrets:/etc/prometheus/secrets:ro
       - prom-data:/prometheus
     restart: unless-stopped
 

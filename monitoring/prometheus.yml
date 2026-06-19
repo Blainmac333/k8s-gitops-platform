@@ -2,6 +2,12 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+remote_write:
+  - url: https://prometheus-prod-55-prod-gb-south-1.grafana.net/api/prom/push
+    basic_auth:
+      username: "3317368"
+      password_file: /etc/prometheus/secrets/grafana-cloud-password
+
 scrape_configs:
   # Prometheus itself
   - job_name: prometheus
