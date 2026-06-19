@@ -1,4 +1,5 @@
 grafana.env
+monitoring/secrets/
 
 # Terraform
 terraform/.terraform/
