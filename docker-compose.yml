@@ -77,6 +77,7 @@ services:
   alloy:
     image: grafana/alloy:latest
     container_name: alloy
+    user: "0:0"
     command:
       - run
       - /etc/alloy/config.alloy
@@ -84,7 +85,9 @@ services:
     volumes:
       - ./monitoring/alloy-config.alloy:/etc/alloy/config.alloy:ro
       - ./monitoring/secrets:/etc/alloy/secrets:ro
-      - /var/log:/var/log/host:ro
+      - /var/log/journal:/var/log/journal:ro
+      - /run/log/journal:/run/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - alloy-data:/var/lib/alloy/data
     restart: unless-stopped
