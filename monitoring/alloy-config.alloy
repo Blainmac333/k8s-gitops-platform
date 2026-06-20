@@ -3,28 +3,24 @@ local.file "loki_token" {
   filename = "/etc/alloy/secrets/loki-token"
 }
 
-// --- Host-level logs (syslog, kernel)
-local.file_match "host_logs" {
-  path_targets = [
-    {__path__ = "/var/log/host/syslog",   job = "syslog"},
-    {__path__ = "/var/log/host/kern.log", job = "kernel"},
-  ]
+// --- Host-level logs via systemd journal — this Pi uses
+// journald, not rsyslog flat files, so we read the journal
+// directly rather than tailing /var/log/syslog (which doesn't
+// get written here)
+loki.source.journal "journal_logs" {
+  forward_to = [loki.process.journal_logs.receiver]
+  labels = {
+    job = "journal",
+  }
+  max_age = "24h"
 }
 
-loki.process "host_logs" {
+loki.process "journal_logs" {
   forward_to = [loki.write.grafana_cloud_loki.receiver]
 
-  // Drop anything older than 24h — Loki rejects entries older than
-  // ~7 days, and without this Alloy loops forever trying to push the
-  // full historical backlog, never catching up to the present
   stage.drop {
     older_than = "24h"
   }
-}
-
-loki.source.file "host_logs" {
-  targets    = local.file_match.host_logs.targets
-  forward_to = [loki.process.host_logs.receiver]
 }
 
 // --- Docker container logs (grafana, prometheus, qr-proxy, etc.)
@@ -37,8 +33,6 @@ local.file_match "docker_logs" {
 loki.process "docker_logs" {
   forward_to = [loki.write.grafana_cloud_loki.receiver]
 
-  // stage.docker must come first — it extracts the real timestamp
-  // from Docker's JSON wrapper, which stage.drop then checks against
   stage.docker {}
 
   stage.drop {
