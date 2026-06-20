@@ -74,6 +74,22 @@ services:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     restart: unless-stopped
 
+  alloy:
+    image: grafana/alloy:latest
+    container_name: alloy
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+    volumes:
+      - ./monitoring/alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - ./monitoring/secrets:/etc/alloy/secrets:ro
+      - /var/log:/var/log/host:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - alloy-data:/var/lib/alloy/data
+    restart: unless-stopped
+
 volumes:
   prom-data:
   grafana-data:
+  alloy-data:

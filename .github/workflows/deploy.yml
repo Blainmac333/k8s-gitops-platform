@@ -287,6 +287,14 @@ jobs:
           printf '%s' "${{ secrets.GRAFANA_CLOUD_REMOTE_WRITE_TOKEN }}" > monitoring/secrets/grafana-cloud-password
           chmod 644 monitoring/secrets/grafana-cloud-password
 
+      - name: Write Grafana Cloud Loki credentials
+        run: |
+          set -e
+          cd ~/apps/devops-qr
+          mkdir -p monitoring/secrets
+          printf '%s' "${{ secrets.GRAFANA_CLOUD_LOKI_TOKEN }}" > monitoring/secrets/loki-token
+          chmod 644 monitoring/secrets/loki-token
+
       - name: Pull and restart stack on Pi (Docker services like Grafana)
         run: |
           set -e
@@ -302,6 +310,9 @@ jobs:
 
       - name: Restart Grafana to pick up provisioning
         run: docker restart grafana || true
+
+      - name: Restart Alloy to pick up config
+        run: docker restart alloy || true
 
       - name: Apply Velero metrics Service
         run: |
