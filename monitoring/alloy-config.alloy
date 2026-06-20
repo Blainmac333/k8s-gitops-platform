@@ -3,7 +3,7 @@ local.file "loki_token" {
   filename = "/etc/alloy/secrets/loki-token"
 }
 
-// --- Host-level logs (syslog, kernel) — this is what actually
+// --- Host-level logs (syslog, kernel)
 local.file_match "host_logs" {
   path_targets = [
     {__path__ = "/var/log/host/syslog",   job = "syslog"},
@@ -11,9 +11,20 @@ local.file_match "host_logs" {
   ]
 }
 
+loki.process "host_logs" {
+  forward_to = [loki.write.grafana_cloud_loki.receiver]
+
+  // Drop anything older than 24h — Loki rejects entries older than
+  // ~7 days, and without this Alloy loops forever trying to push the
+  // full historical backlog, never catching up to the present
+  stage.drop {
+    older_than = "24h"
+  }
+}
+
 loki.source.file "host_logs" {
   targets    = local.file_match.host_logs.targets
-  forward_to = [loki.write.grafana_cloud_loki.receiver]
+  forward_to = [loki.process.host_logs.receiver]
 }
 
 // --- Docker container logs (grafana, prometheus, qr-proxy, etc.)
@@ -23,11 +34,16 @@ local.file_match "docker_logs" {
   ]
 }
 
-// Docker stores each log line as a raw JSON blob — this stage
-// parses it into clean, readable text rather than dumping raw JSON
 loki.process "docker_logs" {
   forward_to = [loki.write.grafana_cloud_loki.receiver]
+
+  // stage.docker must come first — it extracts the real timestamp
+  // from Docker's JSON wrapper, which stage.drop then checks against
   stage.docker {}
+
+  stage.drop {
+    older_than = "24h"
+  }
 }
 
 loki.source.file "docker_logs" {
