@@ -7,6 +7,10 @@ remote_write:
     basic_auth:
       username: "3317368"
       password_file: /etc/prometheus/secrets/grafana-cloud-password
+    write_relabel_configs:
+      - source_labels: [__name__]
+        regex: "container_tasks_state|container_memory_failures_total|container_fs_reads_total|container_fs_writes_total|container_blkio_device_usage_total|container_cpu_load_average_10s|container_cpu_system_seconds_total|container_cpu_user_seconds_total|container_last_seen"
+        action: drop
 
 scrape_configs:
   # Prometheus itself
