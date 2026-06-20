@@ -19,7 +19,7 @@ jobs:
       packages: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -72,7 +72,7 @@ jobs:
       # Make kubectl use the user copy by default
       KUBECONFIG: /home/blain/.kube/config
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Ensure kubeconfig for runner
         run: |
           set -euo pipefail
@@ -865,7 +865,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           token: ${{ secrets.GH_PAT }}
           ref: master
