@@ -1,6 +1,6 @@
 boto3>=1.35.99
 fastapi>=0.139.0
-pillow>=12.2.0
+pillow>=12.3.0
 pydantic>=2.5.3
 pypng>=0.20220715.0
 python-dotenv>=1.2.2
