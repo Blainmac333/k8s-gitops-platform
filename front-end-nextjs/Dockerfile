@@ -2,6 +2,10 @@ FROM node:20-bookworm-slim
 
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
+# Upgrade npm to pull in a patched version of the bundled tar dependency (CVE fix).
+# npm@latest (v12) requires Node >=22; pin to npm@11 which supports Node 20.
+RUN npm install -g npm@11
+
 WORKDIR /app
 
 COPY package*.json ./
