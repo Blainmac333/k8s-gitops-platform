@@ -2,6 +2,9 @@ FROM node:20-bookworm-slim
 
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
+# Upgrade npm to pull in a patched version of the bundled tar dependency (CVE fix).
+RUN npm install -g npm@latest
+
 WORKDIR /app
 
 COPY package*.json ./
