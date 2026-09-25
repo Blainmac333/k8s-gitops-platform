@@ -54,8 +54,8 @@ ArgoCD's admin password is set via a **bcrypt hash** stored directly in the Helm
 ```yaml
 configs:
   secret:
-   argocdServerAdminPassword: "$2a$10$..."   # bcrypt hash of the password
-   argocdServerAdminPasswordMtime: "YYYY-MM-DDT00:00:00Z"
+      argocdServerAdminPassword: "$2a$10$..."   # bcrypt hash of the password
+      argocdServerAdminPasswordMtime: "YYYY-MM-DDT00:00:00Z"
 ```
 
 The plaintext password is stored only in your password manager. The bcrypt hash is safe to commit.
@@ -87,6 +87,34 @@ kubectl get secret argocd-initial-admin-secret -n argocd \
   -o jsonpath="{.data.password}" | base64 -d && echo
 ```
 This secret is often deleted after first login, so it may not be present.
+
+### Emergency reset directly on the Pi
+
+If the UI password is unknown, generate and apply a temporary password directly on the Pi. Run this as one uninterrupted shell session:
+
+```bash
+read -rsp "Enter temporary Argo CD password: " ARGO_PWD
+echo
+HASH=$(htpasswd -nbBC 10 "" "$ARGO_PWD" \
+   | cut -d: -f2- \
+   | sed 's/^\$2y/\$2a/')
+NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+kubectl -n argocd patch secret argocd-secret \
+   --type merge \
+   -p "{\"stringData\":{\"admin.password\":\"${HASH}\",\"admin.passwordMtime\":\"${NOW}\"}}"
+
+kubectl -n argocd rollout restart deployment/argo-cd-argocd-server
+kubectl -n argocd rollout status deployment/argo-cd-argocd-server --timeout=600s
+unset ARGO_PWD HASH
+```
+
+Log in with username `admin`. The Argo CD server deployment is named `argo-cd-argocd-server` in this cluster. A live secret patch can be overwritten by Helm/GitOps, so replace the hash in `infra/argocd/helmchart.yaml`, update the mtime, and merge that change after confirming the login works.
+
+Common mistakes:
+
+- `read -rsp "..." ARGO_PWD` uses the text in quotes as the prompt; type the password after the prompt appears.
+- The Helm chart keys must be `argocdServerAdminPassword` and `argocdServerAdminPasswordMtime`. The shorter `argoAdminPassword` names are ignored.
 
 ---
 
