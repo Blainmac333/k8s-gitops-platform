@@ -43,7 +43,7 @@ spec:
 
     configs:
       secret:
-        argocdServerAdminPassword: "$2a$10$SBfMsHLNi8UREpxK7lFAsOjVEIljLelSMGddOqVMNMnKEmlvNYBS2"
+        argocdServerAdminPassword: "$2a$10$OdN0FJgvxxPXv/ndyuGBUez/bOMPi92MNDyC/TMMBAwfb0fcbRVgC"
         argocdServerAdminPasswordMtime: "2026-09-25T00:00:00Z"
       params:
         server.insecure: "true"
