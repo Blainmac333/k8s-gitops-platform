@@ -54,8 +54,8 @@ ArgoCD's admin password is set via a **bcrypt hash** stored directly in the Helm
 ```yaml
 configs:
   secret:
-    argoAdminPassword: "$2a$10$..."   # bcrypt hash of the password
-    argoAdminPasswordMtime: "YYYY-MM-DDT00:00:00Z"
+   argocdServerAdminPassword: "$2a$10$..."   # bcrypt hash of the password
+   argocdServerAdminPasswordMtime: "YYYY-MM-DDT00:00:00Z"
 ```
 
 The plaintext password is stored only in your password manager. The bcrypt hash is safe to commit.
@@ -69,8 +69,8 @@ The plaintext password is stored only in your password manager. The bcrypt hash 
    ```
 2. Copy the output (starts with `$2a$10$...`).
 3. Create a new branch and update `infra/argocd/helmchart.yaml`:
-   - Replace the `argoAdminPassword` value with the new hash.
-   - Update `argoAdminPasswordMtime` to today's date.
+   - Replace the `argocdServerAdminPassword` value with the new hash.
+   - Update `argocdServerAdminPasswordMtime` to today's date.
 4. Commit, push, and open a PR. After merge, Argo CD will sync and apply the new password automatically.
 
 ### Recovering a lost password
